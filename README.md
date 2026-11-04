@@ -1,5 +1,7 @@
 # 句读 · 英文文献阅读室
 
+**Local paid AI (Phase 1):** see [LOCAL_AI.md](LOCAL_AI.md) for GPT-5 mini setup, Chinese science explanations, usage estimates and the ChatGPT copy fallback. No Redis is needed locally. Paid AI is disabled in production/Vercel until Phase 2 security and durable budgets are implemented. This supersedes older AI setup instructions below.
+
 Vercel serverless support: see [VERCEL.md](VERCEL.md). `/api/translate` and MyMemory remain fully integrated; successful live translation on the deployed domain is a required release check. No deployment has been performed.
 
 实际运行的 PDF 阅读网站，面向中文母语的化工与药学学生。React / TypeScript + PDF.js + Express。界面主语言为英文，翻译内容为中文；采用用户提供的 Olive Leaf / Pistachio / Butter Yellow / Lemon Cream / Warm Stone 色系。默认保留 PDF 原始排版。

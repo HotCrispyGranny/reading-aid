@@ -10,5 +10,5 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 if(process.env.NODE_ENV==='production'){app.use(express.static(path.join(root,'dist')));app.get('/{*splat}',(_req,res)=>res.sendFile(path.join(root,'dist/index.html')))}else{
  const {createServer}=await import('vite');const vite=await createServer({server:{middlewareMode:true},appType:'spa'});app.use(vite.middlewares);
 }
-const args=process.argv.slice(2);const flag=n=>args[args.indexOf(n)+1];const port=Number(process.env.PORT||(args.includes('--port')?flag('--port'):4173));const host=process.env.HOST||(args.includes('--host')?flag('--host'):'0.0.0.0');
+const args=process.argv.slice(2);const flag=n=>args[args.indexOf(n)+1];const port=Number(process.env.PORT||(args.includes('--port')?flag('--port'):4173));const host=process.env.HOST||(args.includes('--host')?flag('--host'):'127.0.0.1');
 app.listen(port,host,()=>console.log(`句读 reader listening on ${host}:${port}; AI ${process.env.AI_API_KEY?'configured':'not configured'}`));

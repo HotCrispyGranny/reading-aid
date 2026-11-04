@@ -1,3 +1,5 @@
+> Phase 1 local AI update: paid endpoints are now intentionally disabled on Vercel and in production, even when a key is configured. See LOCAL_AI.md. Public paid AI requires Phase 2 authentication and persistent budget enforcement. MyMemory translation remains available.
+
 # Vercel deployment — translation is a release gate
 
 ## Architecture

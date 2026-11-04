@@ -4,12 +4,12 @@ import path from 'node:path';
 import {readdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {validateSources,callAI} from './ai.mjs';
+import {validateSources,callAI,localAIAllowed,aiSettings} from './ai.mjs';
 
 // Shared Express application: importing it never opens a port or starts Vite.
 const app=express(),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 app.disable('x-powered-by');app.use(express.json({limit:'200kb'}));
-app.get('/api/status',(_req,res)=>res.json({configured:!!process.env.AI_API_KEY,model:process.env.AI_MODEL||'gpt-4.1-mini'}));
+app.get('/api/status',(_req,res)=>res.json({configured:localAIAllowed(_req)&&!!process.env.AI_API_KEY,localOnly:true,...aiSettings()}));
 async function libraryFiles(){try{return (await readdir(path.join(root,'.local/papers'))).filter(n=>n.toLowerCase().endsWith('.pdf')).map(name=>({id:createHash('sha256').update(name).digest('hex').slice(0,20),name}))}catch{return []}}
 app.get('/api/library',async(_req,res)=>res.json(await libraryFiles()));
 app.get('/api/library/:id',async(req,res)=>{const entry=(await libraryFiles()).find(f=>f.id===req.params.id);if(!entry)return res.status(404).json({error:'Paper not found.'});res.set('Cache-Control','private, no-store');res.sendFile(path.join(root,'.local/papers',entry.name))});
@@ -26,7 +26,8 @@ app.post('/api/translate',async(req,res)=>{
 });
 app.post('/api/:task',async(req,res)=>{
  if(!['analyze','chat','word'].includes(req.params.task))return res.status(404).json({error:'Unknown operation.'});
- if(!process.env.AI_API_KEY)return res.status(503).json({error:'AI is optional and not configured. Set AI_API_KEY, AI_BASE_URL and AI_MODEL on the server to enable advanced tools. PDF reading, translation, notes and highlights do not need an AI key.'});
+ if(!localAIAllowed(req))return res.status(403).json({error:'Paid AI is restricted to direct localhost development in Phase 1. Production/Vercel AI is disabled until Phase 2 authentication and budget enforcement are implemented.'});
+ if(!process.env.AI_API_KEY)return res.status(503).json({error:'AI is optional and not configured. Set AI_API_KEY and AI_MODEL on the server to enable advanced tools. PDF reading, translation, notes and highlights do not need an AI key.'});
  // Same-origin endpoint; don't expose this local tool on the public Internet without authentication.
  const origin=req.get('origin');if(origin&&new URL(origin).host!==req.get('host'))return res.status(403).json({error:'Cross-site requests are not allowed.'});
  const key=req.ip,now=Date.now();const times=(recent.get(key)||[]).filter(t=>now-t<60000);recent.set(key,times);

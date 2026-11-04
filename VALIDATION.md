@@ -1,3 +1,11 @@
+# Phase 1 local AI validation
+
+- `npm test`: 16 tests passed, including official Responses SDK protocol with a mocked upstream, usage and cache accounting, GPT-5 mini settings, bounded follow-up history, local-only/production restrictions and Bridge context construction.
+- `npm run build`: passed; the prior Bridge TypeScript error is fixed.
+- Chromium: 10 scenarios, covering the existing PDF/translation/notes suite plus real clipboard copy, new-tab navigation, clipboard denial fallback, assistant context and Chinese follow-ups (AI HTTP boundary mocked).
+- No API key was configured; live GPT-5 mini answer quality, availability and billing were not verified. No API charge or deployment was performed. Local setup: LOCAL_AI.md.
+- Deployment configuration and PDF rendering/segmentation/storage modules were not changed. Phase 2 authentication and persistent budgets are intentionally deferred.
+
 # Vercel adaptation validation
 
 - 12 module/API tests passed, including real HTTP requests to the exported Vercel handler with only the external MyMemory boundary mocked.

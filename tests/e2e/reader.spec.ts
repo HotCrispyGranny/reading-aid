@@ -14,6 +14,6 @@ test('real PDF render and focus',async({page})=>{
  await page.keyboard.press('ArrowDown');await expect(page.locator('.sentence-quote')).toContainText('labour cost');
  await page.getByRole('button',{name:'Zoom in',exact:true}).click();await expect(page.locator('.focus-box').first()).toBeVisible();
  const geometry=await page.locator('.pdf-page[data-page="1"]').evaluate(root=>{const r=root.getBoundingClientRect();const box=root.querySelector('.focus-box')!.getBoundingClientRect();return {left:box.left-r.left,top:box.top-r.top,width:box.width,height:box.height,pageWidth:r.width}});console.log('geometry',geometry);expect(geometry.width).toBeGreaterThan(20);expect(geometry.left).toBeGreaterThan(0);expect(geometry.left+geometry.width).toBeLessThan(geometry.pageWidth+3);
- const unavailable=await page.request.post('/api/chat',{data:{sources:[{id:'S1',page:1,text:'A real sentence.'}]}});expect(unavailable.status()).toBe(503);expect((await unavailable.json()).error).toContain('AI is optional and not configured');
+ const unavailable=await page.request.post('/api/chat',{data:{sources:[{id:'S1',page:1,text:'A real sentence.'}]}});expect([403,503]).toContain(unavailable.status());expect((await unavailable.json()).error).toMatch(/Paid AI is restricted|AI is optional and not configured/);
  expect(errors).toEqual([]);
 });

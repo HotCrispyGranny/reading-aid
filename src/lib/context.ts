@@ -11,7 +11,8 @@ export function buildContext(scope:string,current:Sentence|undefined,sentences:S
   for(const p of pages){const first=sentences.find(s=>s.page===p.page);if(first)chosen.add(first.id)}
   if(current)chosen.add(current.id);candidates=sentences.filter(s=>chosen.has(s.id));coverage=`Whole-paper retrieval (${pages.length} pages ${complete?'indexed':', indexing incomplete'}; related excerpts, not the full paper)`;
  }
+ if(current){candidates=[current,...candidates.filter(s=>s.id!==current.id)];if(scope!=='sentence'&&current.context&&current.context!==current.text)candidates.splice(1,0,{...current,id:current.id+'-paragraph',text:current.context.slice(0,3500)})}
  const sources:Source[]=[];let size=0;
- for(const s of candidates){if(size+s.text.length>24000)break;size+=s.text.length;sources.push({id:`S${sources.length+1}`,page:s.page,text:s.text,sentenceId:s.id})}
- return {sources,coverage:coverage+(size>=23000?'; context truncated':''),complete};
+ for(const s of candidates){if(size+s.text.length>12000)break;size+=s.text.length;sources.push({id:`S${sources.length+1}`,page:s.page,text:s.text,sentenceId:s.id})}
+ return {sources,coverage:coverage+(size>=11000?'; context truncated':''),complete};
 }
