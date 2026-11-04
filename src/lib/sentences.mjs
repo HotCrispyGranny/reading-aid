@@ -34,7 +34,7 @@ export function readingLines(items,width,height){
  // Establish normal baselines before attaching superscripts/subscripts.
  for(const b of [...boxes].sort((a,b)=>b.h-a.h||a.y-b.y)){
   const small=b.h<bodySize*.82;
-  let row=rows.filter(r=>Math.abs(r.y-b.y)<Math.max(r.h,b.h)*(small?.85:.36)&&(!small||r.items.some(it=>it.h>b.h*1.15&&b.x<=it.x+it.w+bodySize*2&&b.x+b.w>=it.x-bodySize*2))).sort((a,c)=>Math.abs(a.y-b.y)-Math.abs(c.y-b.y))[0];
+  let row=rows.filter(r=>Math.abs(r.y-b.y)<Math.max(r.h,b.h)*(small?.85:.36)&&(!small||r.items.some(it=>Math.abs(it.h-b.h)<b.h*.15&&Math.abs(it.y-b.y)<b.h*.36||it.h>b.h*1.15&&b.x<=it.x+it.w+bodySize*2&&b.x+b.w>=it.x-bodySize*2))).sort((a,c)=>Math.abs(a.y-b.y)-Math.abs(c.y-b.y))[0];
   if(!row){row={y:b.y,h:b.h,items:[]};rows.push(row)}row.items.push(b);
  }
  for(const r of rows)r.items.sort((a,b)=>a.x-b.x);
@@ -78,6 +78,10 @@ function lineText(line){
   text+=(text&&!touching?' ':'')+b.text.trim().replace(/\s+/gu,' ');previous=b;
  }return text;
 }
+function lineFont(line){
+ const weights=new Map();for(const b of line.items)weights.set(b.font,(weights.get(b.font)||0)+b.text.length);
+ return [...weights].sort((a,b)=>b[1]-a[1])[0]?.[0];
+}
 function prose(line){
  const t=line.text;
  if(t.length<2||/^\d+$/.test(t))return false;
@@ -104,13 +108,14 @@ export function extractPage(items,width,height,page){
   const headingLabel=numberOnly||/^\d+(?:\.\d+)*\.?\s+\p{Lu}/u.test(line.text)||/^(?:abstract|introduction|results(?: and discussion)?|conclusions?|references|acknowledg(?:e)?ments?|nomenclature)$/i.test(line.text);
   const isHeading=!isCaption&&(headingLabel||line.h>bodySize*1.2);
   let kind=isCaption?'caption':isHeading?'heading':'body';
-  const definitions=!!nomenclature&&line.y>=nomenclature.y&&line.y<=definitionEnd;
+  const definitions=!!nomenclature&&line.col===nomenclature.col&&line.y>=nomenclature.y&&line.y<=definitionEnd;
   const valid=(prose(line)||isCaption||isHeading)&&!definitions;
   const gap=previous?Math.abs(line.y-previous.y):0;
-  const sameStyle=previous&&Math.abs(line.h-previous.h)<line.h*.15&&line.items[0].font===previous.items[0].font;
+  const sameStyle=previous&&Math.abs(line.h-previous.h)<line.h*.15&&lineFont(line)===lineFont(previous);
   const nearEdge=previous&&previous.right>=(columnRight.get(previous.col)||width)-previous.h*5;
   const wrapped=block&&previous&&line.col===previous.col&&gap<=lineStep*1.35&&sameStyle&&line.x<=previous.x+line.h*1.1;
-  if(kind==='body'&&wrapped&&block.kind!=='body'&&(!/[.!?。！？]["'”’\])]*$/.test(block.text)||nearEdge&&/^\p{Ll}/u.test(line.text))&&(nearEdge||block.kind==='caption'||/^\d+(?:\.\d+)*\.$/.test(block.text)))kind=block.kind;
+  const captionWrap=block?.kind==='caption'&&(gap<line.h*.3||nearEdge&&line.h<bodySize*.96);
+  if(kind==='body'&&wrapped&&block.kind!=='body'&&(captionWrap||!/[.!?。！？]["'”’\])]*$/.test(block.text)||nearEdge&&/^\p{Ll}/u.test(line.text))&&(nearEdge||block.kind==='caption'||/^\d+(?:\.\d+)*\.$/.test(block.text)))kind=block.kind;
   const newBlock=!block||!valid||!previous||kind!==block.kind||headingLabel||isCaption||(isHeading&&!(wrapped&&nearEdge))||line.col!==previous.col||gap>Math.max(Math.max(line.h,previous.h)*1.85,lineStep*1.6)||(line.x>previous.x+line.h*1.1&&sentenceRanges(block.text).at(-1)?.complete)||Math.abs(line.h-previous.h)>line.h*.28;
   if(newBlock)block=null;
   if(!valid){previous=null;continue}
@@ -142,7 +147,7 @@ export function extractPage(items,width,height,page){
    const runs=sourceRuns(b.map,r,page);
    const first=b.lines[0],last=b.lines.at(-1);
    sentences.push({id:`p${page}-i${runs[0]?.itemIndex}-${runs[0]?.start}`,page,text,runs,kind:b.kind,blockId:b.id,complete:r.complete,context:b.text,col:first.col,
-    continuationStart:r.start===0&&first.x<=(columnLeft.get(first.col)??first.x)+bodySize*.6,font:first.items[0].font,endFont:last.items[0].font,fontSize:first.h,endFontSize:last.h});
+    continuationStart:r.start===0&&first.x<=(columnLeft.get(first.col)??first.x)+bodySize*.6,font:lineFont(first),endFont:lineFont(last),fontSize:first.h,endFontSize:last.h});
   }
  }
  return {page,width,height,gutter,blocks:blocks.map(b=>({id:b.id,text:b.text,kind:b.kind})),sentences,text:items.map(i=>i.str).join(' '),itemCount:items.filter(i=>i.str?.trim()).length};
@@ -173,16 +178,39 @@ function sourceRuns(map,range,page){
 /** Merge genuine continuations between columns/pages; don't guess across headings. */
 export function joinContinuations(pages){
  const result=[];
- for(const page of pages){for(const s of page.sentences){
+ for(const page of pages){
+  const previous=result.at(-1);
+  // Restart at the next page's first body column, even if a figure pushes its
+  // text below the other column. Captions remain independent indexed units.
+  const candidate=previous?.runs.at(-1).page+1===page.page&&!previous.complete?pageContinuation(page,previous):null;
+  if(candidate)mergeContinuation(previous,candidate);
+  for(const s of page.sentences){
+  if(s===candidate)continue;
   const prev=result.at(-1);
   const lastPage=prev?.runs.at(-1).page;
-  const boundary=lastPage===s.page?prev.col==='left'&&s.col==='right':lastPage+1===s.page;
-  const sameStyle=prev&&prev.endFont===s.font&&Math.abs(prev.endFontSize-s.fontSize)<s.fontSize*.2;
-  if(prev&&!prev.complete&&prev.kind==='body'&&s.kind==='body'&&s.continuationStart&&sameStyle&&boundary){
-   const hyphen=/\p{L}[-\u00ad]$/u.test(prev.text)&&/^\p{L}/u.test(s.text);
-   prev.text=prev.text.slice(0,hyphen&&discretionaryHyphen(prev.text,s.text)?-1:undefined)+(hyphen?'':' ')+s.text;prev.runs.push(...s.runs);prev.complete=s.complete;prev.context+=' '+s.context;prev.col=s.col;prev.endFont=s.endFont;prev.endFontSize=s.endFontSize;
+  if(lastPage===s.page&&prev.col==='left'&&s.col==='right'&&canContinue(prev,s)){
+   mergeContinuation(prev,s);
   }else result.push({...s,runs:[...s.runs]});
  }}return result;
+}
+function canContinue(previous,next){
+ return previous&&!previous.complete&&previous.kind==='body'&&next.kind==='body'&&next.continuationStart&&previous.endFont===next.font&&Math.abs(previous.endFontSize-next.fontSize)<next.fontSize*.2;
+}
+function pageContinuation(page,previous){
+ const leftFlow=page.sentences.some(s=>s.col==='left'&&s.kind!=='caption'&&s.fontSize>=previous.endFontSize*.85);
+ const column=page.gutter?(leftFlow?'left':'right'):'full';
+ for(const s of page.sentences){
+  if(s.col!==column&&!(s.col==='full'&&s.kind==='heading'))continue;
+  if(s.kind==='heading')return null;
+  if(s.kind==='caption'||s.fontSize<previous.endFontSize*.85)continue;
+  return canContinue(previous,s)?s:null;
+ }return null;
+}
+function mergeContinuation(previous,next){
+ const hyphen=/\p{L}[-\u00ad]$/u.test(previous.text)&&/^\p{L}/u.test(next.text);
+ previous.text=previous.text.slice(0,hyphen&&discretionaryHyphen(previous.text,next.text)?-1:undefined)+(hyphen?'':' ')+next.text;
+ previous.runs.push(...next.runs);previous.complete=next.complete;previous.context+=' '+next.context;
+ previous.col=next.col;previous.endFont=next.endFont;previous.endFontSize=next.endFontSize;
 }
 /** Navigate the logical index; a page continuation belongs to its starting unit. */
 export function stepSentence(sentences,id,page,delta){

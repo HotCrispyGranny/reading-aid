@@ -238,3 +238,72 @@ test('an unfinished sentence continues from the left column to the right without
  assert.equal(stepSentence(sentences,sentences[3].id,1,1).text,'It worked.');
  assert.equal(stepSentence(sentences,sentences[4].id,1,-1).id,sentences[3].id);
 });
+
+test('cross-page flow follows left-column body below a figure, not higher right-column text',()=>{
+ for(const previousX of [40,320]){
+  const a=extractPage([item('In this paper, fluid velocity is critical to the hydrodynamic forces associated',previousX,700,230)],612,792,1);
+  const items=[
+   item('velocities at the wall than conventional agitators for the same power',320,70,230),
+   item('input, as shown by CFD simulations and laboratory measurements.',320,85,230),
+   item('The next result is independently measured.',320,100,230),
+   item('Nomenclature',320,145,100),item('E   mass eroded from the material surface',320,160,230),
+   item('H   sedimentation bed height at the tank bottom',320,175,230),
+   item('Fig. 13. CFD modelling results for full-scale precipitators.',40,210,230),
+   item('A comparison of three agitator configurations.',40,225,230),
+   item('with lift and drag. In the case of micron-size particles,',40,300,230),
+   item('the erosion effect is negligible compared with the impact.',40,315,230),
+   item('The next left-column result is independently measured.',40,345,230),
+  ];
+  for(const index of [6,7]){items[index].height=9;items[index].transform=[9,0,0,9,40,792-(index===6?210:225)];items[index].fontName='caption'}
+  const b=extractPage(items,612,792,2);assert.ok(b.gutter);
+  const before=JSON.stringify([a,b]),sentences=joinContinuations([a,b]);
+  const joined=sentences.find(s=>s.id===a.sentences[0].id);
+  assert.equal(joined.text,a.sentences[0].text+' with lift and drag.');
+  assert.deepEqual(joined.runs.map(r=>[r.page,r.itemIndex]),[[1,0],[2,8]]);
+  assert.ok(sentences.some(s=>s.kind==='caption'&&s.text.startsWith('Fig. 13.')));
+  assert.ok(sentences.some(s=>s.text.startsWith('velocities at the wall')&&s.page===2));
+  assert.ok(sentences.findIndex(s=>s.text.startsWith('In the case'))<sentences.findIndex(s=>s.text.startsWith('velocities at the wall')));
+  assert.equal(JSON.stringify([a,b]),before);
+ }
+});
+
+test('a leading caption is selectable without blocking a normal single-column page continuation',()=>{
+ const a=extractPage([item('The observation was associated',40,700,230)],612,792,1);
+ const b=extractPage([item('Fig. 12. Measured particle velocities.',40,100,400),item('with lift and drag. Another result follows.',40,300,400)],612,792,2);
+ const sentences=joinContinuations([a,b]);
+ assert.equal(sentences[0].text,'The observation was associated with lift and drag.');
+ assert.ok(sentences.some(s=>s.kind==='caption'&&s.text==='Fig. 12. Measured particle velocities.'));
+ assert.ok(sentences.some(s=>s.text==='Another result follows.'));
+});
+
+test('a heading in the continuing column remains a barrier after a figure caption',()=>{
+ const a=extractPage([item('The observation was associated',40,700,230)],612,792,1);
+ const b=extractPage([item('Fig. 12. Measured particle velocities.',40,100,400),item('8. Conclusions',40,280,150),item('with lift and drag.',40,310,300)],612,792,2);
+ assert.equal(joinContinuations([a,b])[0].text,a.sentences[0].text);
+});
+
+test('a ligature font at the start of the last line does not break a page continuation',()=>{
+ const items=[item('In this paper, we have shown that',40,700,230),item('fl',40,715,6),item('uid velocity is critical to hydrodynamic forces associated',46,715,224)];
+ items[0].fontName=items[2].fontName='body';items[1].fontName='ligature';
+ const next=item('with lift and drag.',40,70,150);next.fontName='body';
+ const a=extractPage(items,612,792,1),b=extractPage([next],612,792,2);
+ const [sentence]=joinContinuations([a,b]);
+ assert.equal(sentence.text,'In this paper, we have shown that fluid velocity is critical to hydrodynamic forces associated with lift and drag.');
+ assert.deepEqual(sentence.runs.map(r=>[r.page,r.itemIndex]),[[1,0],[1,1],[1,2],[2,0]]);
+});
+
+test('small caption items and ligatures stay in their physical line and caption block',()=>{
+ const small=(str,x,y,w,font='body')=>{const b=item(str,x,y,w);b.height=8;b.transform=[8,0,0,8,x,792-y];b.fontName=font;return b};
+ const items=[
+  item('The preceding body paragraph introduces the measured experiment.',40,70,400),
+  small('Fig. 13.',40,100,25,'caption-label'),small('CFD modelling results: full-scale ef',67,100,150),small('fi',217,100,6,'ligature'),small('ciency parameter',223,100,60),
+  small('based on measured velocities in the tank.',40,111,243),
+  item('The following body paragraph is independent of the figure caption.',40,150,400),
+  item('It records the experimental conditions and the available evidence.',40,165,400),
+  item('The instruments were calibrated before the independent experiment.',40,180,400),
+ ];
+ const captions=extractPage(items,612,792,1).sentences.filter(s=>s.kind==='caption');
+ assert.equal(captions.length,1);
+ assert.equal(captions[0].text,'Fig. 13. CFD modelling results: full-scale efficiency parameter based on measured velocities in the tank.');
+ assert.deepEqual(captions[0].runs.map(r=>r.itemIndex),[1,2,3,4,5]);
+});

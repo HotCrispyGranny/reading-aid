@@ -9,11 +9,11 @@ test('real PDF render and focus',async({page})=>{
  await expect(page.locator('.pdf-page[data-page="1"] .textLayer [data-item]').first()).toBeAttached({timeout:30000});
  await expect(page.locator('.parse-progress')).toContainText('sentences indexed',{timeout:30000});
  const target=page.locator('.pdf-page[data-page="1"] .textLayer span').filter({hasText:'Regular maintenance shutdowns'}).first();
- await target.click();await expect(page.locator('.focus-box').first()).toBeVisible();await expect(page.locator('.sentence-quote')).toContainText('Regular maintenance shutdowns');
+ await target.click();await expect(page.locator('.focus-shape').first()).toBeVisible();await expect(page.locator('.sentence-quote')).toContainText('Regular maintenance shutdowns');
  await page.screenshot({path:'/tmp/judu-reading.png',fullPage:true});
  await page.keyboard.press('ArrowDown');await expect(page.locator('.sentence-quote')).toContainText('labour cost');
- await page.getByRole('button',{name:'Zoom in',exact:true}).click();await expect(page.locator('.focus-box').first()).toBeVisible();
- const geometry=await page.locator('.pdf-page[data-page="1"]').evaluate(root=>{const r=root.getBoundingClientRect();const box=root.querySelector('.focus-box')!.getBoundingClientRect();return {left:box.left-r.left,top:box.top-r.top,width:box.width,height:box.height,pageWidth:r.width}});console.log('geometry',geometry);expect(geometry.width).toBeGreaterThan(20);expect(geometry.left).toBeGreaterThan(0);expect(geometry.left+geometry.width).toBeLessThan(geometry.pageWidth+3);
+ await page.getByRole('button',{name:'Zoom in',exact:true}).click();await expect(page.locator('.focus-shape').first()).toBeVisible();
+ const geometry=await page.locator('.pdf-page[data-page="1"]').evaluate(root=>{const r=root.getBoundingClientRect();const box=root.querySelector('.focus-shape')!.getBoundingClientRect();return {left:box.left-r.left,top:box.top-r.top,width:box.width,height:box.height,pageWidth:r.width}});console.log('geometry',geometry);expect(geometry.width).toBeGreaterThan(20);expect(geometry.left).toBeGreaterThan(0);expect(geometry.left+geometry.width).toBeLessThan(geometry.pageWidth+3);
  const unavailable=await page.request.post('/api/chat',{data:{sources:[{id:'S1',page:1,text:'A real sentence.'}]}});expect([403,503]).toContain(unavailable.status());expect((await unavailable.json()).error).toMatch(/Paid AI is restricted|AI is optional and not configured/);
  expect(errors).toEqual([]);
 });

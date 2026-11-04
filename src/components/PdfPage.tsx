@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {pdfjs,type PDFDoc} from '../lib/pdf';
 import {textGeometry,geometryRect,mergeLineRects,type GeometryRoot} from '../lib/coordinates';
+import {focusRegions,unselectedRects} from '../lib/focus-shape.mjs';
 import type {Sentence,Mark,Rect} from '../lib/types';
 export function runRects(root:HTMLElement,sentence:Sentence,page:number):Rect[]{
  const spans=Array.from(root.querySelectorAll<HTMLElement>('[data-item]'));const bounds=root.getBoundingClientRect();const scale=Number(root.dataset.scale||1);
@@ -32,10 +33,10 @@ export function captureSelection():{text:string;page:number;rects:Rect[]}|null{
  }
  return rects.length?{text,page:rects[0].page,rects:mergeLineRects(rects)}:null;
 }
-type Props={pdf:PDFDoc;page:number;width:number;height:number;scale:number;sentences:Sentence[];active?:Sentence;focus:boolean;dim:number;color:string;border:boolean;marks:Mark[];onSelect:(s:Sentence,analyze:boolean)=>void;onClearFocus:()=>void;onVisible:(page:number)=>void;onReady:()=>void};
+type Props={pdf:PDFDoc;page:number;width:number;height:number;scale:number;gutter:number|null;sentences:Sentence[];active?:Sentence;focus:boolean;dim:number;color:string;border:boolean;marks:Mark[];onSelect:(s:Sentence,analyze:boolean)=>void;onClearFocus:()=>void;onVisible:(page:number)=>void;onReady:()=>void};
 export default function PdfPage(p:Props){
  const root=useRef<HTMLDivElement>(null),canvas=useRef<HTMLCanvasElement>(null),spot=useRef<HTMLCanvasElement>(null),layer=useRef<HTMLDivElement>(null);
- const [near,setNear]=useState(false),[ready,setReady]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(0),[rects,setRects]=useState<Rect[]>([]);
+ const [near,setNear]=useState(false),[ready,setReady]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(0),[shapes,setShapes]=useState<{page:number;column:string;path:string}[]>([]);
  const onVisible=useRef(p.onVisible),onReady=useRef(p.onReady);onVisible.current=p.onVisible;onReady.current=p.onReady;
  useEffect(()=>{const node=root.current!;const observer=new IntersectionObserver(entries=>{for(const e of entries){setNear(e.isIntersecting)}},{rootMargin:'900px 0px'});observer.observe(node);
   const visible=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)onVisible.current(p.page)},{threshold:.15});visible.observe(node);return()=>{observer.disconnect();visible.disconnect()}},[p.page]);
@@ -53,11 +54,13 @@ export default function PdfPage(p:Props){
   return()=>{dead=true;render?.cancel();text?.cancel();layer.current?.replaceChildren();setReady(false)};
  },[near,p.pdf,p.page,p.scale,retry]);
  useEffect(()=>{
-  const r=ready&&p.active?runRects(root.current!,p.active,p.page):[];setRects(r);
+  const r=ready&&p.active?runRects(root.current!,p.active,p.page):[];
+  const obstacles=r.length?unselectedRects((root.current as GeometryRoot).pdfGeometry||[],p.active!.runs,p.page):[];
+  setShapes(focusRegions(r,p.gutter,obstacles));
   const c=spot.current!,base=canvas.current!;if(!c||!base)return;c.width=base.width;c.height=base.height;
   const ctx=c.getContext('2d')!;ctx.clearRect(0,0,c.width,c.height);const ratio=c.width/(p.width*p.scale);
   if(p.focus){for(const box of r){const x=box.x*p.scale*ratio,y=box.y*p.scale*ratio,w=box.w*p.scale*ratio,h=box.h*p.scale*ratio;ctx.drawImage(base,x,y,w,h,x,y,w,h)}}
- },[ready,p.active,p.scale,p.focus,p.width,p.page]);
+ },[ready,p.active,p.scale,p.focus,p.width,p.page,p.gutter]);
  function clicked(e:React.MouseEvent,analyze=false){
   if(!ready||(!analyze&&window.getSelection()?.toString().length))return;
   if(analyze)e.preventDefault();
@@ -84,7 +87,9 @@ export default function PdfPage(p:Props){
   <canvas ref={canvas} className="pdf-canvas" style={{opacity:p.focus&&p.active?1-p.dim:1}}/>
   <div className="mark-layer">{p.marks.flatMap(m=>m.rects.filter(r=>r.page===p.page).map((r,i)=><div key={m.id+'-'+i} className="saved-mark" title="Saved highlight" style={{...styleRect(r),background:m.color}}/>))}</div>
   <canvas ref={spot} className="spot-canvas" style={{width:p.width*p.scale,height:p.height*p.scale}}/>
-  {p.focus&&rects.map((r,i)=><div key={i} className="focus-box" style={{...styleRect(r),background:p.color,border:p.border?'1px solid #7d8760':'none'}}/>)}
+  {p.focus&&shapes.length>0&&<svg className="sentence-focus" aria-hidden="true" width={p.width*p.scale} height={p.height*p.scale} viewBox={`0 0 ${p.width} ${p.height}`} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:4,mixBlendMode:'multiply'}}>
+   {shapes.map(shape=><path key={shape.page+'-'+shape.column} className="focus-shape" d={shape.path} fill={p.color} fillRule="evenodd" stroke={p.border?'#7d8760':'none'} strokeWidth="1" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>)}
+  </svg>}
   <div ref={layer} className="textLayer"/>
   {!ready&&!error&&<div className="page-loading">{near?'Rendering…':'Page '+p.page+''}</div>}
   {error&&<div className="page-loading error">Could not load page: {error}<button onClick={()=>setRetry(n=>n+1)}>Retry</button></div>}
