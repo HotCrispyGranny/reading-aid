@@ -1,3 +1,11 @@
+# Vercel adaptation validation
+
+- 12 module/API tests passed, including real HTTP requests to the exported Vercel handler with only the external MyMemory boundary mocked.
+- Production build/type check passed. React/PDF reader source was not changed.
+- All 8 browser regressions passed against the production build: PDF upload, sentence focus, keyboard/input handling, zoom, persistent notes/highlights and backup recovery, word translation, translation cache/race handling and explicit failures.
+- A live MyMemory request was attempted through the managed proxy and was rejected with CONNECT HTTP 403. This is an external verification blocker, not a disabled feature. Actual Vercel runtime routing and live in-panel translation must be verified using VERCEL.md after authorized deployment.
+- No Vercel deployment was performed.
+
 # Latest update: English interface, olive palette and translation-first workflow
 
 - `npm test`: 10 tests passed, including real-provider protocol construction, UTF-8 byte-bound chunking, quota/network failure handling (upstream mocked only in unit tests).

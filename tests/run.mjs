@@ -3,3 +3,4 @@
 import './sentences.test.mjs';
 import './ai.test.mjs';
 import './translation.test.mjs';
+import './api.test.mjs';

@@ -1,5 +1,7 @@
 # 句读 · 英文文献阅读室
 
+Vercel serverless support: see [VERCEL.md](VERCEL.md). `/api/translate` and MyMemory remain fully integrated; successful live translation on the deployed domain is a required release check. No deployment has been performed.
+
 实际运行的 PDF 阅读网站，面向中文母语的化工与药学学生。React / TypeScript + PDF.js + Express。界面主语言为英文，翻译内容为中文；采用用户提供的 Olive Leaf / Pistachio / Butter Yellow / Lemon Cream / Warm Stone 色系。默认保留 PDF 原始排版。
 
 **当前优先流程：上传 PDF → 整句聚焦 → Translate to Chinese。翻译无需 AI 密钥。AI 聊天与详细分析是可选功能，未配置时不显示聊天入口。**
