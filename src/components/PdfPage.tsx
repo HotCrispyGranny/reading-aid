@@ -32,7 +32,7 @@ export function captureSelection():{text:string;page:number;rects:Rect[]}|null{
  }
  return rects.length?{text,page:rects[0].page,rects:mergeLineRects(rects)}:null;
 }
-type Props={pdf:PDFDoc;page:number;width:number;height:number;scale:number;sentences:Sentence[];active?:Sentence;focus:boolean;dim:number;color:string;border:boolean;marks:Mark[];onSelect:(s:Sentence,analyze:boolean)=>void;onVisible:(page:number)=>void;onReady:()=>void};
+type Props={pdf:PDFDoc;page:number;width:number;height:number;scale:number;sentences:Sentence[];active?:Sentence;focus:boolean;dim:number;color:string;border:boolean;marks:Mark[];onSelect:(s:Sentence,analyze:boolean)=>void;onClearFocus:()=>void;onVisible:(page:number)=>void;onReady:()=>void};
 export default function PdfPage(p:Props){
  const root=useRef<HTMLDivElement>(null),canvas=useRef<HTMLCanvasElement>(null),spot=useRef<HTMLCanvasElement>(null),layer=useRef<HTMLDivElement>(null);
  const [near,setNear]=useState(false),[ready,setReady]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(0),[rects,setRects]=useState<Rect[]>([]);
@@ -61,7 +61,18 @@ export default function PdfPage(p:Props){
  function clicked(e:React.MouseEvent,analyze=false){
   if(!ready||(!analyze&&window.getSelection()?.toString().length))return;
   if(analyze)e.preventDefault();
-  const target=(e.target as HTMLElement).closest<HTMLElement>('[data-item]');if(!target)return;
+  const element=e.target as HTMLElement;
+  if(element.closest('a,button,input,textarea,select,[role="button"],[contenteditable],.saved-mark,.mark-layer,.page-loading'))return;
+  const target=element.closest<HTMLElement>('[data-item]');
+  if(!target){
+   if(!analyze&&p.focus&&p.active&&(element===e.currentTarget||element.matches('.textLayer,.pdf-canvas'))){
+    // Saved overlays ignore pointer events, so protect their bounds even when
+    // the click falls through to the page background underneath them.
+    const bounds=e.currentTarget.getBoundingClientRect(),x=(e.clientX-bounds.left)/p.scale,y=(e.clientY-bounds.top)/p.scale;
+    const overMark=p.marks.some(m=>m.rects.some(r=>r.page===p.page&&x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h));
+    if(!overMark)p.onClearFocus();
+   }return;
+  }
   const index=Number(target.dataset.item);const doc=document as any;const caret=doc.caretPositionFromPoint?.(e.clientX,e.clientY);const range=!caret?doc.caretRangeFromPoint?.(e.clientX,e.clientY):null;let offset=caret?.offset??range?.startOffset??0;
   const g=(root.current as GeometryRoot).pdfGeometry?.[index];if(g&&!g.rotated){const x=(e.clientX-root.current!.getBoundingClientRect().x)/p.scale-g.x;offset=Math.max(0,g.advances.findIndex(v=>v>x)-1);if(x>=g.advances.at(-1)!)offset=g.advances.length-2}
   const candidates=p.sentences.filter(s=>s.runs.some(r=>r.page===p.page&&r.itemIndex===index));

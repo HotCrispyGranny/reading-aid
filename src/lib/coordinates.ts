@@ -1,4 +1,5 @@
 import {pdfjs} from './pdf';
+import {itemRect} from './highlight-geometry.mjs';
 export type ItemGeometry={x:number;y:number;h:number;advances:number[];rotated:boolean};
 export type GeometryRoot=HTMLElement&{pdfGeometry?:ItemGeometry[]};
 /** Recover font advances from PDF text drawing operators, then reconcile word spacing.
@@ -35,9 +36,7 @@ async function computeGeometry(page:pdfjs.PDFPageProxy,content:any):Promise<Item
  });
 }
 export function geometryRect(root:GeometryRoot,item:number,start:number,end:number,page:number){
- const g=root.pdfGeometry?.[item];if(!g||g.rotated||!g.advances.length)return null;
- const left=g.advances[Math.min(start,g.advances.length-1)]||0,right=g.advances[Math.min(end,g.advances.length-1)]||0;
- return {page,x:g.x+left,y:g.y,w:Math.max(0,right-left),h:g.h};
+ return itemRect(root.pdfGeometry?.[item],start,end,page);
 }
 
 export function mergeLineRects<T extends {page:number;x:number;y:number;w:number;h:number}>(rects:T[]):T[]{
