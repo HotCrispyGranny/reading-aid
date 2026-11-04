@@ -9,3 +9,5 @@ import './api.test.mjs';
 import './local-ai.test.mjs';
 import './beta.test.mjs';
 import './beta-ledger.test.mjs';
+import './byok.test.mjs';
+import './byok-ledger.test.mjs';

@@ -1,6 +1,6 @@
 # 句读 · 英文文献阅读室
 
-**Local paid AI (Phase 1):** see [LOCAL_AI.md](LOCAL_AI.md) for GPT-5 mini setup, Chinese science explanations, usage estimates and the ChatGPT copy fallback. No Redis is needed locally. Production paid AI defaults OFF; [FRIENDS_BETA.md](FRIENDS_BETA.md) documents the optional invite/session, durable-limit and budget policy required to enable it. This supersedes older AI setup instructions below.
+**Local paid AI (Phase 1):** see [LOCAL_AI.md](LOCAL_AI.md) for GPT-5 mini setup, Chinese science explanations, usage estimates and the ChatGPT copy fallback. No Redis is needed locally. Production paid AI defaults OFF; [FRIENDS_BETA.md](FRIENDS_BETA.md) documents the owner-only sessions/budgets and optional personal OpenAI keys (BYOK). This supersedes older AI setup instructions below.
 
 Vercel serverless support: see [VERCEL.md](VERCEL.md). `/api/translate` and MyMemory remain fully integrated; successful live translation on the deployed domain is a required release check. The verified reader-only site is `https://reading-aid.vercel.app`; this implementation does not deploy or change hosted settings.
 
@@ -58,12 +58,13 @@ npm start
 
 For direct localhost development see [LOCAL_AI.md](LOCAL_AI.md). The official OpenAI
 Responses API uses server-only `AI_API_KEY` and defaults to `AI_MODEL=gpt-5-mini`.
-`AI_BASE_URL` and older Chat Completions instructions are obsolete. API keys never
-belong in `VITE_*` variables or frontend/browser storage.
+`AI_BASE_URL` and older Chat Completions instructions are obsolete. The owner key never
+belongs in `VITE_*` variables or frontend code. Optional user-supplied BYOK keys
+remain in tab memory only; see the handling and trust boundary below.
 
 Production paid AI defaults OFF. See [FRIENDS_BETA.md](FRIENDS_BETA.md) for the complete
-Vercel environment checklist, hashed invites, expiring cookies, Redis initialization,
-atomic lifetime-beta budget and manual acceptance checks. Local development requires
+Vercel environment checklist, owner authentication, tab-only BYOK keys, Redis
+abuse limits, owner lifetime budget and manual acceptance checks. Local development requires
 no Redis; production never falls back to unauthenticated or process-memory accounting.
 
 PDFs/notes/marks/progress stay browser-local. MyMemory translation remains independent

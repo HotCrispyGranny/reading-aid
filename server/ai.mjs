@@ -44,13 +44,20 @@ export function prepareAIRequest({task,sources,question,detail,history,coverage,
 export async function callAI(args,options={}){
  const {task,sources,signal}=args;
  const {settings,input}=options.prepared||prepareAIRequest(args);
+ const explicitKey=Object.hasOwn(options,'apiKey'),apiKey=explicitKey?options.apiKey:process.env.AI_API_KEY;
+ if(typeof apiKey!=='string'||!apiKey.trim())throw Error('An OpenAI API key is required.');
+ const cacheAllowed=!explicitKey&&options.cache!==false;
  const key=createHash('sha256').update(JSON.stringify({input,model:settings.model,max:settings.maxOutputTokens})).digest('hex');
- const hit=options.cache===false?null:cache.get(key);if(hit&&Date.now()-hit.time<86400000)return {...hit.result,usage:{...hit.result.usage,cacheHit:true,chargedThisCallUSD:0,sessionEstimatedUSD:spent}};
- const client=new OpenAI({apiKey:process.env.AI_API_KEY,baseURL:'https://api.openai.com/v1',logLevel:'off',maxRetries:0,timeout:55000});
+ const hit=cacheAllowed?cache.get(key):null;if(hit&&Date.now()-hit.time<86400000)return {...hit.result,usage:{...hit.result.usage,cacheHit:true,chargedThisCallUSD:0,sessionEstimatedUSD:spent}};
+ // An explicitly supplied key is authoritative. Never let an empty BYOK option
+ // fall through to AI_API_KEY or the SDK's OPENAI_API_KEY environment default.
+ // Explicit credentials also ignore ambient owner organization/project headers.
+ const client=new OpenAI({apiKey,...(explicitKey?{organization:null,project:null}:{}),baseURL:'https://api.openai.com/v1',logLevel:'off',maxRetries:0,timeout:55000});
  let response;
  try{response=await client.responses.create({model:settings.model,input,max_output_tokens:settings.maxOutputTokens,...(settings.model.startsWith('gpt-5')?{reasoning:{effort:'low'}}:{}),text:{format:{type:'json_object'}},store:false},{signal})}
- catch(e){if(signal?.aborted)throw Object.assign(Error('Canceled'),{name:'AbortError'});throw Error(e.status===401?'OpenAI authentication failed. Check the server key.':e.status===429?'OpenAI rate limit or quota exceeded.':e.status===400||e.status===404?'OpenAI rejected the model or request settings. Check AI_MODEL; no automatic model fallback was used.':'OpenAI request failed. Check connectivity and server configuration; a timed-out request may still incur provider charges.')}
- if(options.onUsage){if(!['completed','incomplete'].includes(response.status))throw Error('OpenAI did not report a final response.');await options.onUsage(response.usage)}
+ catch(e){if(signal?.aborted)throw Object.assign(Error('Canceled'),{name:'AbortError'});throw Object.assign(Error(e.status===401?'OpenAI authentication failed. Check the server key.':e.status===429?'OpenAI rate limit or quota exceeded.':e.status===400||e.status===404?'OpenAI rejected the model or request settings. Check AI_MODEL; no automatic model fallback was used.':'OpenAI request failed. Check connectivity and server configuration; a timed-out request may still incur provider charges.'),{code:e.status===401?'OPENAI_AUTH_FAILED':e.status===429?'OPENAI_RATE_LIMITED':'OPENAI_REQUEST_FAILED'})}
+ if(!['completed','incomplete'].includes(response.status))throw Error('OpenAI did not report a final response.');
+ if(options.onUsage)await options.onUsage(response.usage);
  const cost=usageCost(response.usage,settings.pricing);if(options.trackProcess!==false){spent+=cost||0;requests++}
  const usage={inputTokens:response.usage?.input_tokens||0,outputTokens:response.usage?.output_tokens||0,cachedInputTokens:response.usage?.input_tokens_details?.cached_tokens||0,reasoningTokens:response.usage?.output_tokens_details?.reasoning_tokens||0,estimatedCostUSD:cost,chargedThisCallUSD:cost,model:settings.model,cacheHit:false,sessionEstimatedUSD:spent};
  if(response.status==='incomplete')throw Error('OpenAI reached the output limit before completing the answer. Try a shorter question or increase AI_MAX_OUTPUT_TOKENS. Provider usage may still be billed.');
@@ -58,5 +65,5 @@ export async function callAI(args,options={}){
  let result;
  if(task==='analyze')result={analysis:validateAnalysis(parsed),usage};
  else {if(typeof parsed.answer!=='string')throw Error('OpenAI answer format is invalid.');result={answer:parsed.answer,sources:validatedCitations(parsed.citations,sources),usage}}
- if(options.cache!==false){if(cache.size>=128)cache.delete(cache.keys().next().value);cache.set(key,{time:Date.now(),result})}return result;
+ if(cacheAllowed){if(cache.size>=128)cache.delete(cache.keys().next().value);cache.set(key,{time:Date.now(),result})}return result;
 }

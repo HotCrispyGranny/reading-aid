@@ -1,4 +1,4 @@
-import {betaConfig,BetaError,production,requireOrigin,verifySession,inviteIdentity,issueSession,sessionCookie,same,digest} from './beta-config.mjs';
+import {betaConfig,BetaError,production,requireOrigin,verifySession,ownerIdentity,issueSession,sessionCookie,same,digest} from './beta-config.mjs';
 import {RedisBetaStore} from './beta-store.mjs';
 import {aiSettings,prepareAIRequest,callAI,validateSources,usageCost} from './ai.mjs';
 
@@ -42,8 +42,8 @@ export function createBetaService({config=()=>betaConfig(),store=c=>new RedisBet
    // Do not trust arbitrary forwarded-IP headers. A shared proxy may make this
    // bucket stricter; the separate global attempt limit always applies.
    await store(c).attempt(digest(c.secret+'\0'+(req.socket?.remoteAddress||'unknown')),now());
-   if(!object(req.body)||Object.keys(req.body).length!==1)throw new BetaError('INVALID_INVITE');
-   const id=inviteIdentity(req.body.code,c);await store(c).authorize(id,c.invites[id]);res.set('Set-Cookie',sessionCookie(issueSession(id,c,now())));return {authenticated:true};
+   if(!object(req.body)||Object.keys(req.body).length!==1)throw new BetaError('OWNER_CODE_INVALID');
+   const id=ownerIdentity(req.body.code,c);await store(c).authorize(id,c.invites[id]);res.set('Set-Cookie',sessionCookie(issueSession(id,c,now())));return {authenticated:true};
   },
   async logout(req,res){const c=config();requireOrigin(req,c);const s=verifySession(req,c,now());if(!same(req.get('x-csrf-token'),s.csrf))throw new BetaError('CSRF_REJECTED');res.set('Set-Cookie',sessionCookie('',0));return {authenticated:false}},
   async paid(req,res,task){
@@ -56,7 +56,7 @@ export function createBetaService({config=()=>betaConfig(),store=c=>new RedisBet
    let settled=false;
    try{
     if(res.destroyed)throw new BetaError('AI_UNAVAILABLE');
-    const result=await ai({...args,signal:controller.signal},{prepared,cache:false,trackProcess:false,onUsage:async usage=>{
+    const result=await ai({...args,signal:controller.signal},{apiKey:c.apiKey,prepared,cache:false,trackProcess:false,onUsage:async usage=>{
      if(!knownUsage(usage))throw new BetaError('AI_UNAVAILABLE');
      const actual=Math.ceil(usageCost(usage,c.pricing)*1e6);
      await ledger.finish(reservation,actual,usage);settled=true;

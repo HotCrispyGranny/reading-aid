@@ -6,14 +6,21 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {validateSources,callAI,localAIAllowed,aiSettings} from './ai.mjs';
 import {createBetaService,betaErrorResponse,production} from './beta.mjs';
+import {BetaError} from './beta-config.mjs';
+import {createByokService,discardAuthorization} from './byok.mjs';
 
 // Shared Express application: importing it never opens a port or starts Vite.
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-export function createApp({beta=createBetaService()}={}){
+export function createApp({beta=createBetaService(),byok=createByokService()}={}){
 const app=express();
 app.disable('x-powered-by');app.use(express.json({limit:'200kb'}));
-app.get('/api/status',async(req,res)=>{res.set('Cache-Control','private, no-store');res.json(production()?await beta.status(req):{configured:localAIAllowed(req)&&!!process.env.AI_API_KEY,localOnly:true,...aiSettings()})});
-app.get('/api/beta/session',async(req,res)=>{res.set('Cache-Control','private, no-store');res.json(production()?await beta.status(req):{configured:false,beta:{enabled:false,authenticated:false,state:'disabled'}})});
+async function status(req,res){
+ res.set('Cache-Control','private, no-store');
+ if(!production())return res.json({configured:localAIAllowed(req)&&!!process.env.AI_API_KEY,localOnly:true,...aiSettings()});
+ const {beta:owner,...settings}=await beta.status(req);res.json({...settings,owner,byok:await byok.status(req,res)});
+}
+app.get('/api/status',status);
+app.get('/api/beta/session',status);
 for(const action of ['login','logout'])app.post('/api/beta/'+action,async(req,res)=>{
  res.set('Cache-Control','private, no-store');
  if(!production())return res.status(403).json({error:'Beta sessions are only available on the configured production site.',code:'AI_DISABLED'});
@@ -35,10 +42,18 @@ app.post('/api/translate',async(req,res)=>{
 });
 app.post('/api/:task',async(req,res)=>{
  if(!['analyze','chat','word'].includes(req.params.task))return res.status(404).json({error:'Unknown operation.'});
+ const mode=req.get('x-judu-ai-mode');
+ // A supplied user credential must never accidentally select owner/local billing.
+ if(mode!=='byok'&&req.get('authorization')){discardAuthorization(req);return betaErrorResponse(new BetaError('AI_MODE_REQUIRED'),res)}
  if(production()){
   res.set('Cache-Control','private, no-store');
-  try{const result=await beta.paid(req,res,req.params.task);if(!res.destroyed)res.json(result)}catch(e){if(!res.destroyed)betaErrorResponse(e,res)}return;
+  try{
+   if(mode!=='owner'&&mode!=='byok')throw new BetaError('AI_MODE_REQUIRED');
+   const result=await (mode==='owner'?beta:byok).paid(req,res,req.params.task);if(!res.destroyed)res.json(result);
+  }catch(e){if(!res.destroyed)betaErrorResponse(e,res)}return;
  }
+ if(mode==='byok'){discardAuthorization(req);return betaErrorResponse(new BetaError('BYOK_DISABLED'),res)}
+ if(mode&&mode!=='local'&&mode!=='owner')return betaErrorResponse(new BetaError('AI_MODE_REQUIRED'),res);
  if(!localAIAllowed(req))return res.status(403).json({error:'Paid AI is restricted to direct localhost development or configured, authenticated Friends Beta access.'});
  if(!process.env.AI_API_KEY)return res.status(503).json({error:'AI is optional and not configured. Set AI_API_KEY and AI_MODEL on the server to enable advanced tools. PDF reading, translation, notes and highlights do not need an AI key.'});
  // Same-origin endpoint; don't expose this local tool on the public Internet without authentication.
@@ -51,7 +66,7 @@ app.post('/api/:task',async(req,res)=>{
  try{const result=await callAI({...req.body,task:req.params.task,sources,signal:controller.signal});if(!res.destroyed)res.json(result)}catch(e){if(!res.destroyed)res.status(502).json({error:e.name==='AbortError'?'AI request timed out or was canceled. Please retry.':e.message})}finally{active--;clearTimeout(timer)}
 });
 app.use('/api',(_req,res)=>res.status(404).json({error:'Endpoint not found.'}));
-app.use((err,_req,res,_next)=>{res.set('Cache-Control','private, no-store');res.status(400).json({error:err.type==='entity.too.large'?'Request too large. Please choose a smaller scope.':'Invalid request format.',code:'INVALID_REQUEST'})});
+app.use((err,req,res,_next)=>{discardAuthorization(req);res.set('Cache-Control','private, no-store');res.status(400).json({error:err.type==='entity.too.large'?'Request too large. Please choose a smaller scope.':'Invalid request format.',code:'INVALID_REQUEST'})});
 
 return app;
 }

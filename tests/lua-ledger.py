@@ -37,6 +37,8 @@ def evaluate(source):
 evaluate('''
 db={}; redis={call=function(command,key,...)
  local a={...}; local v=db[key]
+ if command=='PING' then return 'PONG' end
+ if command=='SET' then db[key]=tostring(a[1]); return 'OK' end
  if command=='HGET' then return v and v[a[1]] or false end
  if command=='HSET' then v=v or {}; db[key]=v; for i=1,#a,2 do v[a[i]]=tostring(a[i+1]) end; return 1 end
  if command=='HINCRBY' then v=v or {}; db[key]=v; v[a[1]]=tostring((tonumber(v[a[1]]) or 0)+tonumber(a[2])); return tonumber(v[a[1]]) end

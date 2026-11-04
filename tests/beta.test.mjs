@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {IncomingMessage,ServerResponse} from 'node:http';
 import {Duplex} from 'node:stream';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHmac} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {createApp} from '../server/app.mjs';
 import {createBetaService,maximumCost,validateBetaRequest} from '../server/beta.mjs';
@@ -12,9 +12,9 @@ import {prepareAIRequest} from '../server/ai.mjs';
 
 // Test credentials are intentionally fake. Tests never open sockets/listeners.
 const code='a'.repeat(43),otherCode='b'.repeat(43);
-const environment={NODE_ENV:'production',VERCEL:'1',AI_BETA_ENABLED:'true',AI_BETA_PRICING_CONFIRMED:'true',AI_BETA_ORIGIN:'https://reading-aid.vercel.app',AI_API_KEY:'test-only-not-a-real-key',AI_MODEL:'gpt-5-mini',AI_MAX_OUTPUT_TOKENS:'2500',AI_INPUT_USD_PER_MILLION:'.25',AI_CACHED_INPUT_USD_PER_MILLION:'.025',AI_OUTPUT_USD_PER_MILLION:'2',AI_BETA_BUDGET_USD:'5',AI_BETA_SESSION_SECRET:'test-only-signing-secret-'.repeat(3),AI_BETA_INVITES_JSON:JSON.stringify({alice:digest(code),bob:digest(otherCode)}),AI_BETA_REDIS_REST_URL:'https://redis.example.test',AI_BETA_REDIS_REST_TOKEN:'test-only-redis-credential'};
+const environment={NODE_ENV:'production',VERCEL:'1',AI_BETA_ENABLED:'true',AI_BETA_PRICING_CONFIRMED:'true',AI_BETA_ORIGIN:'https://reading-aid.vercel.app',AI_API_KEY:'test-only-not-a-real-key',AI_MODEL:'gpt-5-mini',AI_MAX_OUTPUT_TOKENS:'2500',AI_INPUT_USD_PER_MILLION:'.25',AI_CACHED_INPUT_USD_PER_MILLION:'.025',AI_OUTPUT_USD_PER_MILLION:'2',AI_BETA_BUDGET_USD:'5',AI_BETA_SESSION_SECRET:'test-only-signing-secret-'.repeat(3),AI_OWNER_CODE_SHA256:digest(code),AI_BETA_REDIS_REST_URL:'https://redis.example.test',AI_BETA_REDIS_REST_TOKEN:'test-only-redis-credential'};
 const payload={sources:[{id:'S1',page:1,text:'The temperature was 25 °C.'}],question:'Explain it',history:[],document:{title:'Test paper',fileName:'test.pdf',page:1}};
-const headers={origin:environment.AI_BETA_ORIGIN,'content-type':'application/json','sec-fetch-site':'same-origin'};
+const headers={origin:environment.AI_BETA_ORIGIN,'content-type':'application/json','sec-fetch-site':'same-origin','x-judu-ai-mode':'owner'};
 function request(app,path,{method='POST',body={},headers:extra={},ip='127.0.0.1',raw}={}){
  return new Promise((resolve,reject)=>{
   const socket=new Duplex({read(){},write(_chunk,_encoding,callback){callback()}});socket.remoteAddress=ip;
@@ -45,7 +45,7 @@ async function fixture(run,{env={},ai,providerStatus='completed'}={}){
  try{
   let c;try{c=betaConfig()}catch{c={...betaConfig(environment)}}
   const ledger=new Ledger(c),beta=createBetaService({store:()=>ledger,...(ai?{ai}:{})}),app=createApp({beta});
-  const cookie=sessionCookie(issueSession('alice',c)).split(';')[0];
+  const cookie=sessionCookie(issueSession('owner',c)).split(';')[0];
   const session=verifySession({get:k=>k==='cookie'?cookie:undefined},c);
   const auth={cookie,'x-csrf-token':session.csrf,'x-ai-request-id':randomUUID()};
   await run({app,c,ledger,auth,beta,calls:()=>calls});
@@ -59,27 +59,27 @@ test('production paid routes stay disabled by default, including when a key exis
 
 test('every required production setting fails closed when missing or invalid',()=>{
  for(const key of Object.keys(environment).filter(k=>!['NODE_ENV','VERCEL'].includes(k))){assert.throws(()=>betaConfig({...environment,[key]:undefined}),BetaError,key)}
- for(const patch of [{AI_MODEL:'gpt-5'},{AI_BETA_ORIGIN:'http://reading-aid.vercel.app'},{AI_BETA_REDIS_REST_URL:'http://redis.example.test'},{AI_BETA_SESSION_SECRET:'short'},{AI_BETA_INVITES_JSON:'{}'},{AI_BETA_BUDGET_USD:'NaN'},{AI_OUTPUT_USD_PER_MILLION:''}])assert.throws(()=>betaConfig({...environment,...patch}),BetaError);
+ for(const patch of [{AI_MODEL:'gpt-5'},{AI_BETA_ORIGIN:'http://reading-aid.vercel.app'},{AI_BETA_REDIS_REST_URL:'http://redis.example.test'},{AI_BETA_SESSION_SECRET:'short'},{AI_OWNER_CODE_SHA256:'invalid'},{AI_BETA_BUDGET_USD:'NaN'},{AI_OUTPUT_USD_PER_MILLION:''}])assert.throws(()=>betaConfig({...environment,...patch}),BetaError);
 });
 
-test('valid invite issues an expiring secure cookie and never returns the raw code',()=>fixture(async({app})=>{
+test('valid owner code issues an expiring secure cookie and never returns the raw code',()=>fixture(async({app})=>{
  const r=await request(app,'/api/beta/login',{body:{code}});assert.equal(r.status,200);const cookie=r.headers['set-cookie'];
  for(const attribute of ['HttpOnly','Secure','SameSite=Strict','Path=/','Max-Age=28800'])assert.ok(cookie.includes(attribute));
  assert.ok(!JSON.stringify(r).includes(code));
  const status=await request(app,'/api/status',{method:'GET',headers:{cookie:cookie.split(';')[0]}});
- assert.equal(status.body.configured,true);assert.equal(status.body.beta.authenticated,true);assert.ok(status.body.beta.csrfToken);
+ assert.equal(status.body.configured,true);assert.equal(status.body.owner.authenticated,true);assert.ok(status.body.owner.csrfToken);
  assert.equal(status.body.sessionEstimatedUSD,undefined);assert.equal(status.body.sessionRequests,undefined);
 }));
 
-test('invalid invites are rejected and invalid attempts are durably limited',()=>fixture(async({app,calls,ledger})=>{
- for(let i=0;i<5;i++)assert.equal((await request(app,'/api/beta/login',{body:{code:'z'.repeat(43)}})).body.code,'INVALID_INVITE');
+test('invalid owner codes are rejected and invalid attempts are durably limited',()=>fixture(async({app,calls,ledger})=>{
+ for(let i=0;i<5;i++)assert.equal((await request(app,'/api/beta/login',{body:{code:'z'.repeat(43)}})).body.code,'OWNER_CODE_INVALID');
  const r=await request(app,'/api/beta/login',{body:{code}});assert.equal(r.status,429);assert.equal(r.body.code,'RATE_LIMITED');assert.equal(ledger.login,6);assert.equal(calls(),0);
 }));
 
 test('expired, tampered and revoked sessions cannot authenticate',()=>fixture(async({app,c,auth,calls})=>{
- const expired=sessionCookie(issueSession('alice',c,Date.now()-(SESSION_SECONDS+1)*1000)).split(';')[0];
+ const expired=sessionCookie(issueSession('owner',c,Date.now()-(SESSION_SECONDS+1)*1000)).split(';')[0];
  for(const [cookie,expected]of [[expired,'SESSION_EXPIRED'],[auth.cookie+'x','SESSION_INVALID']]){const r=await request(app,'/api/chat',{body:payload,headers:{...auth,cookie}});assert.equal(r.status,401);assert.equal(r.body.code,expected)}
- const rotated={...c,invites:{...c.invites,alice:digest('revoked')}};assert.throws(()=>verifySession({get:()=>auth.cookie},rotated),BetaError);assert.equal(calls(),0);
+ const rotated={...c,invites:{...c.invites,owner:digest('revoked')}};assert.throws(()=>verifySession({get:()=>auth.cookie},rotated),BetaError);assert.equal(calls(),0);
 }));
 
 test('all paid endpoints require session and CSRF; missing or cross-site Origin is denied',()=>fixture(async({app,auth,calls})=>{
@@ -98,7 +98,7 @@ test('successful paid request reserves before OpenAI, settles actual usage and h
 }));
 
 test('per-invite and global limits block additional provider calls',()=>fixture(async({app,auth,ledger,calls})=>{
- ledger.per.set('alice',5);assert.equal((await request(app,'/api/chat',{body:payload,headers:auth})).body.code,'RATE_LIMITED');
+ ledger.per.set('owner',5);assert.equal((await request(app,'/api/chat',{body:payload,headers:auth})).body.code,'RATE_LIMITED');
  ledger.per.clear();ledger.global=20;assert.equal((await request(app,'/api/chat',{body:payload,headers:auth})).body.code,'RATE_LIMITED');assert.equal(calls(),0);
 }));
 
@@ -136,7 +136,7 @@ test('maximum reservation includes full serialized prompt and all output tokens;
 
 test('Redis adapter sends atomic EVAL operations and sanitizes upstream failures',async()=>{
  const c=betaConfig(environment);const sent=[];const store=new RedisBetaStore(c,async(_url,options)=>{sent.push(JSON.parse(options.body));return new Response(JSON.stringify({result:'OK'}))});
- const r=await store.reserve('alice','id',5000,60000);await store.finish(r,100,{input_tokens:100,output_tokens:10});
+ const r=await store.reserve('owner','id',5000,60000);await store.finish(r,100,{input_tokens:100,output_tokens:10});
  assert.equal(sent[0][1],RESERVE);assert.equal(sent[0][3],BUDGET_KEY);assert.equal(sent[1][1],FINISH);
  const broken=new RedisBetaStore(c,async()=>{throw Error('secret Redis failure '+c.redisToken)});
  await assert.rejects(()=>broken.ready(),e=>e.code==='AI_UNAVAILABLE'&&!e.message.includes(c.redisToken));
@@ -155,11 +155,21 @@ test('all three existing AI tasks remain usable after beta authentication',()=>f
  assert.equal(calls(),3);
 }));
 
-test('durable revocation denies an old deployment/session while another invite remains valid',()=>fixture(async({app,auth,c,ledger,calls})=>{
- const bob=sessionCookie(issueSession('bob',c)).split(';')[0];delete ledger.c.invites.alice;
- assert.equal((await request(app,'/api/chat',{body:payload,headers:auth})).body.code,'SESSION_INVALID');
- assert.equal((await request(app,'/api/status',{method:'GET',headers:{cookie:bob}})).body.configured,true);
- assert.equal(calls(),0);
+test('durable owner revocation denies old owner sessions',()=>fixture(async({app,auth,ledger,calls})=>{
+ delete ledger.c.invites.owner;
+ assert.equal((await request(app,'/api/chat',{body:payload,headers:auth})).body.code,'SESSION_INVALID');assert.equal(calls(),0);
+}));
+
+test('non-owner codes and even correctly signed non-owner identities cannot spend owner funds',()=>fixture(async({app,c,auth,calls})=>{
+ const previousInvites=process.env.AI_BETA_INVITES_JSON;
+ process.env.AI_BETA_INVITES_JSON=JSON.stringify({friend:digest(otherCode)});
+ try{
+  assert.equal((await request(app,'/api/beta/login',{body:{code:otherCode}})).body.code,'OWNER_CODE_INVALID');
+  const original=JSON.parse(Buffer.from(auth.cookie.split('=')[1].split('.')[0],'base64url').toString());
+  const body=Buffer.from(JSON.stringify({...original,id:'friend'})).toString('base64url');
+  const cookie=auth.cookie.split('=')[0]+'='+body+'.'+createHmac('sha256',c.secret).update(body).digest('base64url');
+  assert.equal((await request(app,'/api/chat',{body:payload,headers:{...auth,cookie}})).body.code,'SESSION_INVALID');assert.equal(calls(),0);
+ }finally{if(previousInvites===undefined)delete process.env.AI_BETA_INVITES_JSON;else process.env.AI_BETA_INVITES_JSON=previousInvites}
 }));
 
 test('a store timeout after reservation acknowledgement is lost cannot start a provider call',()=>fixture(async({app,auth,ledger,calls})=>{

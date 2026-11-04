@@ -54,8 +54,9 @@ The direct-localhost policy rejects production mode, any Vercel environment, non
 
 The localhost policy above remains unchanged and is not a way to authenticate remote
 requests. [FRIENDS_BETA.md](FRIENDS_BETA.md) documents a separate default-off production
-policy: hashed individual invites, signed eight-hour cookies, atomic Redis limits,
-and a durable lifetime-beta budget with conservative reservations. No Redis is needed
+policy: owner-only signed eight-hour sessions, atomic Redis limits, and a durable owner
+budget with conservative reservations. Friends can optionally use their own
+OpenAI keys in tab memory, with independent limits and no owner-billing fallback. No Redis is needed
 for direct localhost development. A missing/failed beta configuration never falls back
 to local access or in-memory production budgets.
 

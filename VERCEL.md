@@ -1,4 +1,4 @@
-> Production paid AI defaults OFF. Optional protected Friends Beta setup is documented in [FRIENDS_BETA.md](FRIENDS_BETA.md). MyMemory translation remains independent.
+> Production paid AI defaults OFF. Optional owner-only AI and personal-key (BYOK) setup is documented in [FRIENDS_BETA.md](FRIENDS_BETA.md). MyMemory translation remains independent.
 
 
 # Vercel deployment — translation is a release gate
@@ -59,4 +59,4 @@ Then in the browser:
 
 MyMemory has shared free-IP quotas and can rate-limit shared hosting egress. A correct deployment cannot guarantee unlimited availability or specialist translation quality. If the provider fails the real acceptance check, translation remains release-blocked even if the frontend loads. Existing retry and external-link helpers remain available, but neither counts as satisfying the in-site translation requirement.
 
-Server caches, concurrency counters and rate limits are best-effort per warm function instance, not distributed state. Browser translation caches and notes remain durable in IndexedDB. No database is required by this change. `.local/papers` stays ignored and is not bundled; `/api/library` returns an empty list when no local papers exist, while personal PDF upload remains supported. Optional AI functionality remains intact and still needs its own server key.
+Translation caches, concurrency counters and rate limits are best-effort per warm function instance, not distributed state. Production paid AI instead uses durable Redis limits. Browser translation caches and notes remain durable in IndexedDB. No database is required for the public reader or translation. `.local/papers` stays ignored and is not bundled; `/api/library` returns an empty list when no local papers exist, while personal PDF upload remains supported. Owner AI requires its server key and durable budget; optional BYOK uses each user's transient key. Both default off and require the separate Redis policy in FRIENDS_BETA.md.
