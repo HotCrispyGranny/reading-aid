@@ -7,3 +7,5 @@ import './ai.test.mjs';
 import './translation.test.mjs';
 import './api.test.mjs';
 import './local-ai.test.mjs';
+import './beta.test.mjs';
+import './beta-ledger.test.mjs';

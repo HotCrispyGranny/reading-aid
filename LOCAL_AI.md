@@ -1,6 +1,6 @@
 # Phase 1: personal AI assistant on localhost
 
-Phase 1 is implemented without Redis, authentication setup, or deployment. Paid AI is intentionally unavailable in production/Vercel. PDF reading and MyMemory translation remain available independently.
+Phase 1 is implemented without Redis, authentication setup, or deployment. Production paid AI defaults OFF; the separate opt-in Friends Beta policy is documented in [FRIENDS_BETA.md](FRIENDS_BETA.md). PDF reading and MyMemory translation remain available independently.
 
 ## Configure and run on your own computer
 
@@ -48,13 +48,16 @@ No Redis or API key is required for PDF reading, MyMemory translation or Copy & 
 
 ## Local-only protection (not Phase 2 authentication)
 
-All paid endpoints reject production mode, any Vercel environment, non-loopback connections, non-local Host headers and forwarded/proxy requests. Development binds to loopback by default. Do not remove these guards to test publicly. Translation routes are not paid OpenAI routes and remain independent.
+The direct-localhost policy rejects production mode, any Vercel environment, non-loopback connections, non-local Host headers and forwarded/proxy requests. Production uses only the separate opt-in beta policy described below. Development binds to loopback by default. Do not remove these guards to test publicly. Translation routes are not paid OpenAI routes and remain independent.
 
-## Phase 2 remains required before public paid AI
+## Production Friends Beta
 
-Password authentication, durable accounting/reservations, a US$5 monthly application cap, warnings and distributed rate limiting are **not implemented** in Phase 1. Application-side accounting will not replace provider billing controls.
-
-Redis is not inherently required. A single private server with a persistent disk can use SQLite transactions for a simple durable ledger and budget enforcement. Vercel functions need shared durable storage because their local filesystem/process counters are ephemeral; managed Redis or Postgres is appropriate there. You do not need to provision either to test Phase 1 locally.
+The localhost policy above remains unchanged and is not a way to authenticate remote
+requests. [FRIENDS_BETA.md](FRIENDS_BETA.md) documents a separate default-off production
+policy: hashed individual invites, signed eight-hour cookies, atomic Redis limits,
+and a durable lifetime-beta budget with conservative reservations. No Redis is needed
+for direct localhost development. A missing/failed beta configuration never falls back
+to local access or in-memory production budgets.
 
 ## Validation and limitations
 

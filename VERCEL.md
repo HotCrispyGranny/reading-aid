@@ -1,4 +1,5 @@
-> Phase 1 local AI update: paid endpoints are now intentionally disabled on Vercel and in production, even when a key is configured. See LOCAL_AI.md. Public paid AI requires Phase 2 authentication and persistent budget enforcement. MyMemory translation remains available.
+> Production paid AI defaults OFF. Optional protected Friends Beta setup is documented in [FRIENDS_BETA.md](FRIENDS_BETA.md). MyMemory translation remains independent.
+
 
 # Vercel deployment — translation is a release gate
 
@@ -16,7 +17,7 @@ React + Vite still builds the frontend to `dist`. PDF uploads, highlighting, key
 - Framework: Vite. Install: `npm ci --include=dev`. Build: `npm run build`. Output: `dist`.
 - Node: 24.x. No `npm start` command is needed on Vercel.
 - Function duration: 120 seconds, configured in `vercel.json`; keep Fluid Compute enabled and confirm the selected account/plan accepts this duration. Translation retains its 45-second timeout; optional AI retains 60 seconds.
-- No environment variable or AI key is required for MyMemory translation. Optional server-only AI variables are `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`. Never prefix secrets with `VITE_`.
+- No environment variable or AI key is required for MyMemory translation. Optional server-only AI variables are `AI_API_KEY`, `AI_MODEL`; the full protected beta configuration is in `FRIENDS_BETA.md` (`AI_BASE_URL` is obsolete). Never prefix secrets with `VITE_`.
 - `PORT`, `HOST`, the Render `NODE_VERSION` variable, `.env` files and this development environment's proxy variables are not required on Vercel. Vercel injects environment settings into the function process directly.
 - `postinstall` prepares the fonts, CMaps and WASM under `public/pdf-assets`; Vite copies them into `dist`.
 

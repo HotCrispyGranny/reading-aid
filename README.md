@@ -1,8 +1,8 @@
 # 句读 · 英文文献阅读室
 
-**Local paid AI (Phase 1):** see [LOCAL_AI.md](LOCAL_AI.md) for GPT-5 mini setup, Chinese science explanations, usage estimates and the ChatGPT copy fallback. No Redis is needed locally. Paid AI is disabled in production/Vercel until Phase 2 security and durable budgets are implemented. This supersedes older AI setup instructions below.
+**Local paid AI (Phase 1):** see [LOCAL_AI.md](LOCAL_AI.md) for GPT-5 mini setup, Chinese science explanations, usage estimates and the ChatGPT copy fallback. No Redis is needed locally. Production paid AI defaults OFF; [FRIENDS_BETA.md](FRIENDS_BETA.md) documents the optional invite/session, durable-limit and budget policy required to enable it. This supersedes older AI setup instructions below.
 
-Vercel serverless support: see [VERCEL.md](VERCEL.md). `/api/translate` and MyMemory remain fully integrated; successful live translation on the deployed domain is a required release check. No deployment has been performed.
+Vercel serverless support: see [VERCEL.md](VERCEL.md). `/api/translate` and MyMemory remain fully integrated; successful live translation on the deployed domain is a required release check. The verified reader-only site is `https://reading-aid.vercel.app`; this implementation does not deploy or change hosted settings.
 
 实际运行的 PDF 阅读网站，面向中文母语的化工与药学学生。React / TypeScript + PDF.js + Express。界面主语言为英文，翻译内容为中文；采用用户提供的 Olive Leaf / Pistachio / Butter Yellow / Lemon Cream / Warm Stone 色系。默认保留 PDF 原始排版。
 
@@ -54,34 +54,20 @@ npm start
 - 中文译文以 `lang="zh-CN"` 标记，操作标签、状态与错误提示均为英文；用户自己写的笔记和已有阅读数据不会被自动改写。
 - 当前开发环境的网络策略阻止访问 `api.mymemory.translated.net`，已验证真实请求会正确报错，而没有宣称已得到真实上游译文。Render 部署后需要确认实际连通性和额度。云环境使用时，需要在环境网络设置中允许该主机；不要关闭 TLS 验证或绕过代理。
 
-## 配置真实 AI
+## Configure AI
 
-所有密钥只在 Node 服务端读取。前端不保存密钥，不使用 `VITE_` 前缀，不将密钥写入浏览器存储。
+For direct localhost development see [LOCAL_AI.md](LOCAL_AI.md). The official OpenAI
+Responses API uses server-only `AI_API_KEY` and defaults to `AI_MODEL=gpt-5-mini`.
+`AI_BASE_URL` and older Chat Completions instructions are obsolete. API keys never
+belong in `VITE_*` variables or frontend/browser storage.
 
-```bash
-cp .env.example .env
-# 在服务端安全编辑 .env，然后重启 npm run dev / npm start
-```
+Production paid AI defaults OFF. See [FRIENDS_BETA.md](FRIENDS_BETA.md) for the complete
+Vercel environment checklist, hashed invites, expiring cookies, Redis initialization,
+atomic lifetime-beta budget and manual acceptance checks. Local development requires
+no Redis; production never falls back to unauthenticated or process-memory accounting.
 
-```dotenv
-AI_API_KEY=填写服务密钥
-AI_BASE_URL=https://api.openai.com/v1
-AI_MODEL=gpt-4.1-mini
-PORT=4173
-```
-
-可接入提供 `/chat/completions`、JSON 输出格式的 OpenAI 兼容服务。`AI_BASE_URL` 填接口基础路径，不含 `/chat/completions`。当前代码使用 `response_format: { type: 'json_object' }`；如果供应商或模型不支持，会显示明确错误，需要换为支持的模型。`temperature`、`max_tokens` 也是兼容接口参数。当前环境尚未提供真实密钥，**未完成真实上游模型的翻译质量验证**。
-
-在托管云环境中，可通过环境设置安全注入 `AI_API_KEY`，无需写入 `.env`。同时在网络设置允许 AI 主机，例如 `api.openai.com`；使用其他供应商时允许对应实际主机，并将代理凭据的目标域名指向该主机。服务端遵循继承的 HTTP(S) 代理和 CA 信任，不关闭 TLS 校验。不要在聊天里发送密钥。`/api/status` 只返回是否已配置及模型名，不代表已验证上游连通性。
-
-未配置密钥：AI 接口返回明确的 503 提示；PDF 阅读、聚焦、笔记、标注、备份均可使用。未生成任何预制翻译或伪装的 AI 回答。首次发送前，界面说明范围；切换句子只切换面板，不自动调用 AI。
-
-- 句子分析：当前原句 + 最多 7 条附近句子；客户端按文献/句子/解释深度缓存成功结果。「重新分析」明确重新调用。
-- 问答：最多 24,000 字符上下文、最近 8 条限长历史。全文范围是**关键词检索 + 每页代表句**，不是完整全文、语义向量检索或系统性综述；UI 明确显示覆盖范围和解析未完成状态。中文问题没有对应英文关键词时召回可能较弱。
-- 60 秒超时、每 IP 每分钟 20 请求、最多 4 个并发请求。切换句子取消分析；以请求序号和句子缓存键防止旧结果覆盖新句子。
-- PDF 内容在系统提示中定义为不可信数据；不会执行其指令。引用来源 ID 必须存在于实际发送的来源列表，页码和引用片段由该列表生成，不采用模型生成的页码。正文仍可能有模型错误，需对照原文核实。
-
-这是个人/受信网络使用的网站，没有实现用户认证或租户隔离。公开部署前，应在反向代理或应用层增加身份认证、HTTPS 与额度限制；否则访问者可调用同一服务端 AI 账户和读取项目论文目录。
+PDFs/notes/marks/progress stay browser-local. MyMemory translation remains independent
+of paid AI. Only explicit AI requests send bounded excerpts and recent history.
 
 ## 当前支持边界
 
