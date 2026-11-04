@@ -1,10 +1,12 @@
-import {useState} from 'react';
+import {useId,useState} from 'react';
 export type BetaAIStatus={enabled:boolean;authenticated:boolean;state:'disabled'|'unavailable'|'authentication_required'|'session_invalid'|'session_expired'|'authenticated';csrfToken?:string};
 export type ByokStatus={enabled:boolean;state:'disabled'|'unavailable'|'available';csrfToken?:string};
 export type AIMode='owner'|'byok'|'local'|'none';
 type Props={status?:BetaAIStatus;byok?:ByokStatus;mode:AIMode;hasKey:boolean;refresh:()=>Promise<void>;setKey:(key:string)=>void;clearKey:()=>void;selectOwner:()=>void;selectByok:()=>void};
 export default function BetaAIAccess(p:Props){
  const [code,setCode]=useState(''),[draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [managing,setManaging]=useState(false),managementId=useId();
+ const personalReady=p.hasKey&&p.mode==='byok'&&p.byok?.enabled;
  async function submit(action:'login'|'logout'){
   setBusy(true);setError('');
   try{
@@ -13,7 +15,9 @@ export default function BetaAIAccess(p:Props){
    setCode('');await p.refresh();if(action==='login')p.selectOwner();
   }catch(e){setError(e instanceof Error?e.message:'Owner AI is temporarily unavailable.')}finally{setBusy(false)}
  }
- return <section className="chatgpt-bridge" aria-label="AI access" style={{margin:'10px 14px'}}>
+ return <section className="chatgpt-bridge" aria-label="AI access" style={{margin:'10px 14px',...(personalReady&&!managing?{padding:'8px 12px'}:{})}}>
+  {personalReady&&<div className="row"><small role="status">Personal AI ready · gpt-5-mini</small><button className="text-btn" aria-expanded={managing} aria-controls={managementId} onClick={()=>setManaging(open=>!open)}>{managing?'Collapse':'Manage'}</button></div>}
+  <div id={managementId} hidden={personalReady&&!managing}>
   <strong>Owner AI access</strong>
   {p.status?.authenticated?<div className="row"><small>Owner session active · budget protected</small>{p.mode!=='owner'&&<button onClick={p.selectOwner}>Use Owner AI</button>}<button disabled={busy} onClick={()=>submit('logout')}>Sign out of Owner AI</button></div>:p.status?.enabled?<details>
    <summary>Enter the owner access code</summary>
@@ -27,13 +31,14 @@ export default function BetaAIAccess(p:Props){
   <p>Your API key stays in this browser tab and is sent only when you make an AI request. It is not saved by Judu.</p>
   <p>ChatGPT Plus/Pro subscriptions do not automatically provide OpenAI API credit. API requests are billed to the account that issued your key; failed or timed-out requests may still be charged.</p>
   {!p.byok?.enabled&&<p>{p.byok?.state==='unavailable'?'Personal-key AI is temporarily unavailable.':'Personal-key AI is disabled on this deployment.'}</p>}
-  {p.hasKey?<div className="row"><small>Key ready in this tab{p.mode==='byok'?' · selected':''}</small>{p.mode!=='byok'&&<button disabled={!p.byok?.enabled} onClick={p.selectByok}>Use this key</button>}<button onClick={()=>{p.clearKey();setDraft('');setError('')}}>Remove key</button></div>:p.byok?.enabled?<form onSubmit={e=>{
-   e.preventDefault();setError('');try{if(window.location.protocol!=='https:')throw Error('Personal API keys require HTTPS.');p.setKey(draft);setDraft('')}catch(error){setError(error instanceof Error?error.message:'Check your key.')}
+  {p.hasKey?<div className="row"><small>Key ready in this tab{p.mode==='byok'?' · selected':''}</small>{p.mode!=='byok'&&<button disabled={!p.byok?.enabled} onClick={p.selectByok}>Use this key</button>}<button onClick={()=>{p.clearKey();setDraft('');setError('');setManaging(false)}}>Remove key</button></div>:p.byok?.enabled?<form onSubmit={e=>{
+   e.preventDefault();setError('');try{if(window.location.protocol!=='https:')throw Error('Personal API keys require HTTPS.');p.setKey(draft);setDraft('');setManaging(false)}catch(error){setError(error instanceof Error?error.message:'Check your key.')}
   }}>
    <label>OpenAI API key<input type="password" aria-label="Your OpenAI API key" autoComplete="off" spellCheck={false} maxLength={503} value={draft} onChange={e=>setDraft(e.target.value)}/></label>
    <button className="primary" disabled={!draft.trim()}>Use key for this tab</button>
   </form>:null}
   {error&&<p className="error" role="alert">{error}</p>}
   <button disabled={busy} onClick={async()=>{setBusy(true);try{await p.refresh()}finally{setBusy(false)}}}>Refresh AI access</button>
+  </div>
  </section>;
 }
