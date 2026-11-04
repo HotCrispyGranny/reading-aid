@@ -1,0 +1,12 @@
+export type Run={page:number;itemIndex:number;start:number;end:number};
+export type Sentence={id:string;page:number;text:string;runs:Run[];blockId:string;complete:boolean;context:string};
+export type PageData={page:number;width:number;height:number;gutter:number|null;sentences:Sentence[];text:string;itemCount:number;blocks:{id:string;text:string}[]};
+export type Rect={page:number;x:number;y:number;w:number;h:number};
+export type Anchor={text:string;page:number;rects:Rect[];sentenceId?:string};
+export type Mark=Anchor&{id:string;color:string;created:number};
+export type Note=Anchor&{id:string;body:string;category:string;origin:'user'|'ai'|'translation';created:number};
+export type Word={id:string;word:string;meaning:string;quote:string;page:number};
+export type Source={id:string;page:number;text:string;sentenceId?:string};
+export type Message={id:string;role:'user'|'assistant';content:string;sources?:Source[];coverage?:string};
+export type Analysis={translation:string;uncertainties:string[];terms:{term:string;meaning:string;type:string}[];structure:{backbone:string;explanation:string};reminders:{kind:string;text:string}[]};
+export type DocState={id:string;name:string;blob:Blob;page:number;sentenceId?:string;scrollTop?:number;zoom:number;marks:Mark[];notes:Note[];words:Word[];messages:Message[];analyses:Record<string,Analysis>;translations?:Record<string,{translation:string;provider:string;created:number}>;updated:number};
