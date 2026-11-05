@@ -2,6 +2,7 @@
 // nested subprocess test isolation is restricted.
 import './sentences.test.mjs';
 import './scientific-source-coverage.test.mjs';
+import './numeric-prose.test.mjs';
 import './highlight-geometry.test.mjs';
 import './focus-shape.test.mjs';
 import './ai.test.mjs';

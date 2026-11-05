@@ -46,7 +46,9 @@ export function readingLines(items,width,height,viewportTransform=null){
  // Establish normal baselines before attaching superscripts/subscripts.
  for(const b of [...boxes].sort((a,b)=>b.h-a.h||a.y-b.y)){
   const small=b.h<bodySize*.82;
-  let row=rows.filter(r=>Math.abs(r.y-b.y)<Math.max(r.h,b.h)*(small?.85:.36)&&(!small||r.items.some(it=>Math.abs(it.h-b.h)<b.h*.15&&Math.abs(it.y-b.y)<b.h*.36||it.h>b.h*1.15&&b.x<=it.x+it.w+bodySize*2&&b.x+b.w>=it.x-bodySize*2))).sort((a,c)=>Math.abs(a.y-b.y)-Math.abs(c.y-b.y))[0];
+  // Small glyphs need LOCAL support even when another column has a similar
+  // font size/baseline; otherwise degree marks can attach to distant table rows.
+  let row=rows.filter(r=>Math.abs(r.y-b.y)<Math.max(r.h,b.h)*(small?.85:.36)&&(!small||r.items.some(it=>b.x<=it.x+it.w+bodySize*2&&b.x+b.w>=it.x-bodySize*2&&(Math.abs(it.h-b.h)<b.h*.15&&Math.abs(it.y-b.y)<b.h*.36||it.h>b.h*1.15)))).sort((a,c)=>Math.abs(a.y-b.y)-Math.abs(c.y-b.y))[0];
   if(!row){row={y:b.y,h:b.h,items:[]};rows.push(row)}row.items.push(b);
  }
  for(const r of rows)r.items.sort((a,b)=>a.x-b.x);
@@ -132,14 +134,67 @@ function prose(line){
  if((t.match(/\b\d+(?:\.\d+)?\b/g)||[]).length>4&&letters<t.length*.65)return false;
  return true;
 }
+const grammarWords=new Set('a an the and or for with of at where in to from by between within was were is are has have than that this these those which it can'.split(' '));
+function grammarCount(text){return (text.match(/\p{L}+/gu)||[]).filter(word=>grammarWords.has(word.toLowerCase())).length}
+/** Table evidence is physical and independent of PDF item count: numeric cells
+ * separated by multiple wide gaps, reinforced by repeated aligned columns.
+ * This also catches text-label cells that were previously indexed in a table. */
+function tableLines(lines){
+ const rows=[];
+ for(const line of lines){
+  let row=rows.find(r=>r.col===line.col&&Math.abs(r.y-line.y)<Math.max(r.h,line.h)*.3);
+  if(!row){row={col:line.col,y:line.y,h:line.h,lines:[]};rows.push(row)}row.lines.push(line);
+ }
+ for(const row of rows){
+  const cells=[];
+  for(const b of row.lines.flatMap(l=>l.items).sort((a,b)=>a.x-b.x)){
+   let cell=cells.at(-1);
+   if(!cell||b.x-cell.right>Math.max(8,row.h*1.2)){cell={x:b.x,right:b.x+b.w,text:''};cells.push(cell)}
+   cell.right=Math.max(cell.right,b.x+b.w);cell.text+=(cell.text?' ':'')+b.text;
+  }
+  row.cells=cells;row.numeric=cells.filter(c=>/\d/.test(c.text)).length;
+  // Articles in short labels ("Mean of A") do not supply sentence syntax.
+  row.language=grammarCount(cells.map(c=>c.text).join(' ').replace(/\b(?:a|an|the)\b/gi,''));
+ }
+ const blocked=new Set();
+ for(const row of rows){
+  if(row.cells.length<3||row.numeric<2||row.language>1)continue;
+  const repeated=rows.some(other=>other!==row&&other.col===row.col&&Math.abs(other.y-row.y)<=row.h*3&&Math.abs(other.h-row.h)<row.h*.2&&other.numeric>=2&&row.cells.filter(c=>other.cells.some(d=>Math.abs(c.x-d.x)<row.h*.6||Math.abs(c.right-d.right)<row.h*.6)).length>=3);
+  if(repeated||row.language===0)for(const line of row.lines)blocked.add(line);
+ }
+ return blocked;
+}
+/** Keep the conservative standalone classifier, then admit rejected scientific
+ * expressions only with syntax AND body-flow evidence. A nearby unfinished
+ * line alone is insufficient; independently detected table rows always veto. */
+function bodyProse(lines,bodySize){
+ const tables=tableLines(lines),accepted=new Set(lines.filter(l=>prose(l)&&!tables.has(l)));
+ const compatible=(a,b)=>a&&b&&a.col===b.col&&Math.abs(a.h-b.h)<b.h*.15&&lineFont(a)===lineFont(b)&&b.y-a.y>b.h*.5&&b.y-a.y<b.h*1.85&&Math.abs(a.x-b.x)<b.h*2;
+ const boundary=l=>/^(?:\d+(?:\.\d+)*\.?\s+\p{Lu}|(?:fig(?:ure)?s?\.?|table|scheme)\s*(?:\d+[a-z]?|[IVXLCDM]+)[.:])/iu.test(l.text);
+ for(let i=0;i<lines.length;i++){
+  const line=lines[i];if(accepted.has(line)||tables.has(line)||line.h<bodySize*.85||line.h>bodySize*1.2)continue;
+  const text=line.text,language=grammarCount(text);
+  if(!/\d/.test(text)||!/[=×±°◦]|\d\s*[\p{L}µμ]{1,4}\b/u.test(text))continue;
+  const previous=lines[i-1],next=lines[i+1];
+  const continuing=compatible(previous,line)&&accepted.has(previous)&&!boundary(previous)&&!sentenceRanges(previous.text).at(-1)?.complete;
+  const hyphen=continuing&&/\p{L}[-\u00ad]$/u.test(previous.text)&&/^\p{L}/u.test(text);
+  const following=compatible(line,next)&&accepted.has(next)&&!boundary(next);
+  const linked=/\b(?:and|or|for|with|of|at|where|in|to|from|by|between|within)\b/i.test(text);
+  const boundDimensions=continuing&&following&&/\b(?:of|with|at|for)\s*$/i.test(previous.text)&&/×/.test(text);
+  const standalone=language>=3&&/\b(?:was|were|is|are|has|have)\b/i.test(text)&&following;
+  if(continuing&&linked||hyphen&&language>0||boundDimensions||standalone)accepted.add(line);
+ }
+ return {accepted,tables};
+}
 /** @param {number[]|null} [viewportTransform] */
 export function extractPage(items,width,height,page,viewportTransform=null){
  const {lines,gutter,bodySize}=readingLines(items,width,height,viewportTransform);
+ const {accepted:bodyLines,tables}=bodyProse(lines,bodySize);
  const nomenclature=lines.find(l=>/^Nomenclature$/i.test(l.items.map(b=>b.text).join(' ').trim()));
  let definitionEnd=-1;
  if(nomenclature){const ys=[...new Set(lines.filter(l=>l.y>=nomenclature.y).map(l=>l.y))].sort((a,b)=>a-b);definitionEnd=ys.at(-1);for(let i=1;i<ys.length;i++)if(ys[i]-ys[i-1]>bodySize*4){definitionEnd=ys[i-1]+bodySize;break}}
  const steps=lines.slice(1).map((l,i)=>l.col===lines[i].col?l.y-lines[i].y:0).filter(d=>d>bodySize*.7&&d<bodySize*1.9).sort((a,b)=>a-b);const lineStep=steps[Math.floor(steps.length/2)]||bodySize*1.3;
- const columnRight=new Map(),columnLeft=new Map();for(const l of lines){columnRight.set(l.col,Math.max(columnRight.get(l.col)||0,l.right));if(prose(l))columnLeft.set(l.col,Math.min(columnLeft.get(l.col)??Infinity,l.x))}
+ const columnRight=new Map(),columnLeft=new Map();for(const l of lines){columnRight.set(l.col,Math.max(columnRight.get(l.col)||0,l.right));if(bodyLines.has(l))columnLeft.set(l.col,Math.min(columnLeft.get(l.col)??Infinity,l.x))}
  const blocks=[];let block=null;let previous=null;
  for(const line of lines){
   const numberOnly=/^\d+(?:\.\d+)*\.$/.test(line.text);
@@ -149,7 +204,7 @@ export function extractPage(items,width,height,page,viewportTransform=null){
   const isHeading=!isCaption&&(headingLabel||line.h>bodySize*1.2);
   let kind=isCaption?'caption':isHeading?'heading':'body';
   const definitions=!!nomenclature&&line.col===nomenclature.col&&line.y>=nomenclature.y&&line.y<=definitionEnd;
-  const valid=(prose(line)||isCaption||isHeading)&&!definitions;
+  const valid=!tables.has(line)&&(bodyLines.has(line)||isCaption||isHeading)&&!definitions;
   const gap=previous?Math.abs(line.y-previous.y):0;
   const sameStyle=previous&&Math.abs(line.h-previous.h)<line.h*.15&&lineFont(line)===lineFont(previous);
   const nearEdge=previous&&previous.right>=(columnRight.get(previous.col)||width)-previous.h*5;
@@ -195,7 +250,7 @@ export function extractPage(items,width,height,page,viewportTransform=null){
 /** A printed hyphen remains in sourceRuns even when removed from logical text.
  * Preserve common scientific compounds; plain-text PDFs cannot disambiguate
  * every hard hyphen. Soft hyphens explicitly mark discretionary word breaks. */
-const hardHyphenWords=new Set(('approximately approximate arrangement arrangements transitional measured measurement measurements measuring suspension suspensions particles particle precipitator precipitators experimental experiment experiments conditions controlled constant concentration concentrations temperature temperatures velocity velocities hydrodynamic hydrodynamics agitation agitator agitators laboratory comparison conventional conventionally calibration calibrated dimensionless dimensional nomenclature observation observations coefficient coefficients simulation simulations turbulent turbulence numerical numerically distribution distributions parameter parameters normalized normalised efficiency efficient material materials erosion sedimentation').split(' '));
+const hardHyphenWords=new Set(('approximately approximate dimension dimensions arrangement arrangements transitional measured measurement measurements measuring suspension suspensions particles particle precipitator precipitators experimental experiment experiments conditions controlled constant concentration concentrations temperature temperatures velocity velocities hydrodynamic hydrodynamics agitation agitator agitators laboratory comparison conventional conventionally calibration calibrated dimensionless dimensional nomenclature observation observations coefficient coefficients simulation simulations turbulent turbulence numerical numerically distribution distributions parameter parameters normalized normalised efficiency efficient material materials erosion sedimentation').split(' '));
 function discretionaryHyphen(left,right){
  const word=left.match(/([\p{L}]+)([-\u00ad])$/u);if(!word||!/^\p{L}/u.test(right))return false;
  if(word[2]==='\u00ad')return true;
