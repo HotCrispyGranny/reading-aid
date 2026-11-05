@@ -122,8 +122,12 @@ function prose(line){
  if(t.length<2||/^\d+$/.test(t))return false;
  const letters=(t.match(/\p{L}/gu)||[]).length;
  if(letters<Math.max(4,t.length*.42))return false;
- if(line.items.length>=4&&(t.match(/\b\d+(?:\.\d+)?\b/g)||[]).length>=3&&line.items.filter(b=>b.text.trim().split(/\s+/).length<=3).length>=line.items.length*.75)return false;
- if(/[=∑∫√≈≤≥]/.test(t)&&(t.match(/\p{L}{3,}/gu)||[]).length<3)return false;
+ // Inline citations/math split prose into many short PDF items too. Fragment
+ // counts may reject numeric rows only when the reconstructed line lacks prose
+ // evidence, never just because a font/baseline change emitted another item.
+ const words=(t.match(/\p{L}{3,}/gu)||[]).length;
+ if(words<3&&line.items.length>=4&&(t.match(/\b\d+(?:\.\d+)?\b/g)||[]).length>=3&&line.items.filter(b=>b.text.trim().split(/\s+/).length<=3).length>=line.items.length*.75)return false;
+ if(/[=∑∫√≈≤≥]/.test(t)&&words<3)return false;
  // Numeric table rows, references, and short axis labels remain selectable manually.
  if((t.match(/\b\d+(?:\.\d+)?\b/g)||[]).length>4&&letters<t.length*.65)return false;
  return true;
@@ -191,7 +195,7 @@ export function extractPage(items,width,height,page,viewportTransform=null){
 /** A printed hyphen remains in sourceRuns even when removed from logical text.
  * Preserve common scientific compounds; plain-text PDFs cannot disambiguate
  * every hard hyphen. Soft hyphens explicitly mark discretionary word breaks. */
-const hardHyphenWords=new Set(('approximately approximate measured measurement measurements measuring suspension suspensions particles particle precipitator precipitators experimental experiment experiments conditions controlled constant concentration concentrations temperature temperatures velocity velocities hydrodynamic hydrodynamics agitation agitator agitators laboratory comparison conventional conventionally calibration calibrated dimensionless dimensional nomenclature observation observations coefficient coefficients simulation simulations turbulent turbulence numerical numerically distribution distributions parameter parameters normalized normalised efficiency efficient material materials erosion sedimentation').split(' '));
+const hardHyphenWords=new Set(('approximately approximate arrangement arrangements transitional measured measurement measurements measuring suspension suspensions particles particle precipitator precipitators experimental experiment experiments conditions controlled constant concentration concentrations temperature temperatures velocity velocities hydrodynamic hydrodynamics agitation agitator agitators laboratory comparison conventional conventionally calibration calibrated dimensionless dimensional nomenclature observation observations coefficient coefficients simulation simulations turbulent turbulence numerical numerically distribution distributions parameter parameters normalized normalised efficiency efficient material materials erosion sedimentation').split(' '));
 function discretionaryHyphen(left,right){
  const word=left.match(/([\p{L}]+)([-\u00ad])$/u);if(!word||!/^\p{L}/u.test(right))return false;
  if(word[2]==='\u00ad')return true;

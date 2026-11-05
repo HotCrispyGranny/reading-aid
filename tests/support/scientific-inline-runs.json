@@ -1,0 +1,759 @@
+{
+  "source": "Experimental and numerical investigation of the iso-thermal flow characteristics.pdf",
+  "note": "Small source-item excerpts from the supplied PDF. Indices and transforms are original; empty source items are reconstructed by the tests. Physical superscripts are ordinary digits, and degree marks extract as U+25E6.",
+  "cases": [
+    {
+      "name": "top-column-numeric-prose",
+      "page": 3,
+      "width": 594,
+      "height": 792,
+      "transform": [
+        1,
+        0,
+        0,
+        -1,
+        0,
+        792
+      ],
+      "items": [
+        {
+          "index": 11,
+          "str": "4000",
+          "width": 19.9252,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999996,
+            736.0649999999999
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 13,
+          "str": "<",
+          "width": 6.3362136,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            66.86899999999996,
+            736.0649999999999
+          ],
+          "fontName": "g_d0_f9"
+        },
+        {
+          "index": 15,
+          "str": "Re",
+          "width": 10.510543,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            76.05499999999995,
+            736.0649999999999
+          ],
+          "fontName": "g_d0_f8"
+        },
+        {
+          "index": 16,
+          "str": "D",
+          "width": 5.250889400000001,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            86.56599999999995,
+            734.5709999999999
+          ],
+          "fontName": "g_d0_f8"
+        },
+        {
+          "index": 18,
+          "str": "<",
+          "width": 6.3362136,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            95.21199999999995,
+            736.0649999999999
+          ],
+          "fontName": "g_d0_f9"
+        },
+        {
+          "index": 20,
+          "str": "15 000, the flow stability and the flame length",
+          "width": 183.79004480000003,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            104.39799999999994,
+            736.0649999999999
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 21,
+          "str": "in the merged flow from multiple unconfined reacting jets",
+          "width": 244.0837000000001,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999994,
+            724.1099999999999
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 22,
+          "str": "increase as the number of jets (",
+          "width": 123.12777340000008,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999994,
+            712.1549999999999
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 23,
+          "str": "N",
+          "width": 6.645054200000001,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            167.23199999999994,
+            712.1549999999999
+          ],
+          "fontName": "g_d0_f8"
+        },
+        {
+          "index": 24,
+          "str": "j",
+          "width": 2.0218106000000002,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            174.77399999999994,
+            710.6609999999998
+          ],
+          "fontName": "g_d0_f8"
+        },
+        {
+          "index": 25,
+          "str": ") is increased. Nevertheless,",
+          "width": 110.68448600000008,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            177.50499999999994,
+            712.1549999999999
+          ],
+          "fontName": "g_d0_f4"
+        }
+      ]
+    },
+    {
+      "name": "hyphen-and-raised-citations",
+      "page": 2,
+      "width": 594,
+      "height": 792,
+      "transform": [
+        1,
+        0,
+        0,
+        -1,
+        0,
+        792
+      ],
+      "items": [
+        {
+          "index": 147,
+          "str": "almost exclusively for unconfined environments. These have",
+          "width": 244.08370000000016,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            306.1219999999999,
+            162.675
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 148,
+          "str": "shown that the flow characteristics depend strongly on the key",
+          "width": 244.08370000000022,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            306.1219999999999,
+            150.72
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 149,
+          "str": "geometric features of the nozzles as well as their arrange-",
+          "width": 244.0837000000001,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            306.1219999999999,
+            138.765
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 150,
+          "str": "ment.",
+          "width": 22.415850000000002,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            306.1219999999999,
+            126.80999999999999
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 151,
+          "str": "16–23",
+          "width": 18.181750000000005,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            328.5379999999999,
+            130.426
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 153,
+          "str": "For example, Tanaka",
+          "width": 86.30600380000011,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            351.2209999999999,
+            126.80999999999999
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 154,
+          "str": "17,18",
+          "width": 16.363575000000004,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            437.8099999999999,
+            130.426
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 156,
+          "str": "found that, for a tran-",
+          "width": 91.53636880000009,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            458.6729999999999,
+            126.80999999999999
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 157,
+          "str": "sitional/turbulent flow regime (4300",
+          "width": 144.5374008000001,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            306.1219999999999,
+            114.85499999999999
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 159,
+          "str": "<",
+          "width": 6.3362136,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            453.67899999999986,
+            114.85499999999999
+          ],
+          "fontName": "g_d0_f9"
+        },
+        {
+          "index": 161,
+          "str": "Re",
+          "width": 10.510543,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            463.04399999999987,
+            114.85499999999999
+          ],
+          "fontName": "g_d0_f8"
+        },
+        {
+          "index": 162,
+          "str": "D",
+          "width": 5.250889400000001,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            473.5549999999999,
+            113.35999999999999
+          ],
+          "fontName": "g_d0_f8"
+        },
+        {
+          "index": 164,
+          "str": "<",
+          "width": 6.3362136,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            482.3799999999999,
+            114.85499999999999
+          ],
+          "fontName": "g_d0_f9"
+        },
+        {
+          "index": 166,
+          "str": "9000), the rate",
+          "width": 58.460536800000014,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            491.7449999999999,
+            114.85499999999999
+          ],
+          "fontName": "g_d0_f4"
+        }
+      ]
+    },
+    {
+      "name": "hyphen-and-inline-angles",
+      "page": 3,
+      "width": 594,
+      "height": 792,
+      "transform": [
+        1,
+        0,
+        0,
+        -1,
+        0,
+        792
+      ],
+      "items": [
+        {
+          "index": 129,
+          "str": "ditions. Similarly, Boushaki and Sautet",
+          "width": 156.97072560000007,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999989,
+            281.7689999999995
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 130,
+          "str": "28",
+          "width": 7.272700000000001,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            201.37999999999988,
+            285.3849999999995
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 132,
+          "str": "showed that",
+          "width": 47.9998068,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            212.02299999999988,
+            281.7689999999995
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 134,
+          "str": "α",
+          "width": 5.9078218,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            263.0689999999999,
+            281.7689999999995
+          ],
+          "fontName": "g_d0_f9"
+        },
+        {
+          "index": 135,
+          "str": "j",
+          "width": 2.0218106000000002,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            269.3059999999999,
+            280.2739999999995
+          ],
+          "fontName": "g_d0_f8"
+        },
+        {
+          "index": 137,
+          "str": "has",
+          "width": 13.2801458,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            274.90899999999993,
+            281.7689999999995
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 138,
+          "str": "a significant influence both on the mixing and instantaneous",
+          "width": 244.08370000000016,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999993,
+            269.8129999999995
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 139,
+          "str": "velocity fields of multiple-jets configurations for a separated-",
+          "width": 244.0837000000002,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999993,
+            257.8579999999995
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 140,
+          "str": "jet combustor with",
+          "width": 76.23381520000001,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999993,
+            245.90299999999948
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 142,
+          "str": "α",
+          "width": 5.9078218,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            123.85899999999994,
+            245.90299999999948
+          ],
+          "fontName": "g_d0_f9"
+        },
+        {
+          "index": 143,
+          "str": "j",
+          "width": 2.0218106000000002,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            130.09599999999995,
+            244.40899999999948
+          ],
+          "fontName": "g_d0_f8"
+        },
+        {
+          "index": 145,
+          "str": "= 0",
+          "width": 13.94763999999999,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            136.17499999999995,
+            245.90299999999948
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 146,
+          "str": "◦",
+          "width": 3.6145319000000002,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            150.12399999999997,
+            249.51999999999947
+          ],
+          "fontName": "g_d0_f10"
+        },
+        {
+          "index": 147,
+          "str": ", 10",
+          "width": 15.800683599999989,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            154.23599999999996,
+            245.90299999999948
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 148,
+          "str": "◦",
+          "width": 3.6145319000000002,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            170.03899999999996,
+            249.51999999999947
+          ],
+          "fontName": "g_d0_f10"
+        },
+        {
+          "index": 149,
+          "str": ", 20",
+          "width": 15.800683599999989,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            174.15199999999996,
+            245.90299999999948
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 150,
+          "str": "◦",
+          "width": 3.6145319000000002,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            189.95399999999995,
+            249.51999999999947
+          ],
+          "fontName": "g_d0_f10"
+        },
+        {
+          "index": 151,
+          "str": ", 30",
+          "width": 15.800683599999989,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            194.06699999999995,
+            245.90299999999948
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 152,
+          "str": "◦",
+          "width": 3.6145319000000002,
+          "height": 7.2727,
+          "transform": [
+            7.2727,
+            0,
+            0,
+            7.2727,
+            209.86999999999995,
+            249.51999999999947
+          ],
+          "fontName": "g_d0_f10"
+        },
+        {
+          "index": 153,
+          "str": ", but they also did",
+          "width": 74.21140739999998,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            213.98199999999994,
+            245.90299999999948
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 154,
+          "str": "not report details of the inflow and boundary conditions for",
+          "width": 244.08370000000016,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999993,
+            233.94799999999947
+          ],
+          "fontName": "g_d0_f4"
+        },
+        {
+          "index": 155,
+          "str": "inclined-jets cases. Furthermore, none of the previous mea-",
+          "width": 244.08370000000016,
+          "height": 9.9626,
+          "transform": [
+            9.9626,
+            0,
+            0,
+            9.9626,
+            44.10499999999993,
+            221.99299999999945
+          ],
+          "fontName": "g_d0_f4"
+        }
+      ]
+    }
+  ]
+}
