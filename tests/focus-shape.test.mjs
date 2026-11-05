@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {focusRegions,unselectedRects} from '../src/lib/focus-shape.mjs';
+import {focusRegions,unselectedRects,focusOutlineClip,focusColumnBounds} from '../src/lib/focus-shape.mjs';
 
 const rect=(x,y,w,h=10,page=1)=>({page,x,y,w,h});
 function loops(path){return [...path.matchAll(/M([^Z]+)Z/g)].map(m=>{const n=m[1].split(/[L\s]+/).filter(Boolean).map(Number);return Array.from({length:n.length/2},(_,i)=>[n[i*2],n[i*2+1]])})}
@@ -85,4 +85,41 @@ test('outline coverage equals the union of its pieces for irregular overlapping 
    assert.equal(contains(shape.path,x,y),expected,`coverage at ${x}, ${y}, trial ${trial}`);
   }
  }
+});
+
+test('three-column gutters keep focus connectors out of adjacent columns',()=>{
+ const rects=[{page:1,x:30,y:70,w:170,h:11},{page:1,x:225,y:70,w:170,h:11},{page:1,x:420,y:70,w:170,h:11}];
+ const regions=focusRegions(rects,[212,407]);
+ assert.deepEqual(regions.map(r=>r.column),['left','middle','right']);
+ assert.ok(regions.every(r=>r.pieces.length===1));
+});
+
+test('stroke obstacles leave boundary whitespace free but retain exact neighbouring text offsets',()=>{
+ const g={x:10,y:20,h:10,rotated:false,text:'AAA.  BBB.  ',advances:Array.from({length:13},(_,i)=>i*2)};
+ const runs=[{page:1,itemIndex:0,start:0,end:4}];
+ assert.deepEqual(unselectedRects([g],runs,1),[rect(22,20,8)]);
+ const blank={...g,text:'   ',advances:[0,2,4,6]};assert.deepEqual(unselectedRects([blank],[],1),[]);
+});
+
+test('the exterior stroke clip excludes selected ink and close neighbours at every zoom',()=>{
+ const source=[rect(10,20,80,10),rect(30,33,60,10)],shapes=focusRegions(source),near=rect(90.25,33,20,10),far=rect(130,120,20,10);
+ for(const scale of [.35,.5,1,1.6,2.5]){
+  const clip=focusOutlineClip(shapes,[near,far],200,160,scale);
+  for(const r of source)assert.ok(!contains(clip,r.x+r.w/2,r.y+r.h/2));
+  assert.ok(!contains(clip,40,31),'The multi-line connector must have no internal stroke');
+  assert.ok(!contains(clip,90.5,37),'Neighbouring ink must clip an encroaching border');
+  assert.ok(!contains(clip,50,20-.75/scale),'The raster fringe must remain clear, including the real-PDF low-zoom overhang');
+  assert.ok(contains(clip,10-1.5/scale,25),'The exterior border remains available beyond the ink fringe');
+  assert.ok(contains(clip,135,125),'Far away obstacles need no clipping computation');
+ }
+ assert.equal(shapes.length,1);assert.equal(loops(shapes[0].path).length,1);
+});
+
+test('exterior strokes retain separate column clips and independent page geometry',()=>{
+ assert.deepEqual(focusColumnBounds([100,200],'left',300),{x:0,width:100});
+ assert.deepEqual(focusColumnBounds([100,200],'middle',300),{x:100,width:100});
+ assert.deepEqual(focusColumnBounds([100,200],'right',300),{x:200,width:100});
+ const shapes=focusRegions([rect(10,20,70,10),rect(30,200,50,10)]);
+ const clip=focusOutlineClip(shapes,[],300,300,.35);
+ assert.ok(contains(clip,50,100));assert.equal(loops(shapes[0].path).length,2);
 });
