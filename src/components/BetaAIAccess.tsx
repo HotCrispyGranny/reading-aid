@@ -7,6 +7,7 @@ export default function BetaAIAccess(p:Props){
  const [code,setCode]=useState(''),[draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [managing,setManaging]=useState(false),managementId=useId();
  const personalReady=p.hasKey&&p.mode==='byok'&&p.byok?.enabled;
+ const ownerReady=p.mode==='owner'&&p.status?.authenticated;
  async function submit(action:'login'|'logout'){
   setBusy(true);setError('');
   try{
@@ -15,9 +16,9 @@ export default function BetaAIAccess(p:Props){
    setCode('');await p.refresh();if(action==='login')p.selectOwner();
   }catch(e){setError(e instanceof Error?e.message:'Owner AI is temporarily unavailable.')}finally{setBusy(false)}
  }
- return <section className="chatgpt-bridge" aria-label="AI access" style={{margin:'10px 14px',...(personalReady&&!managing?{padding:'8px 12px'}:{})}}>
-  {personalReady&&<div className="row"><small role="status">Personal AI ready · gpt-5-mini</small><button className="text-btn" aria-expanded={managing} aria-controls={managementId} onClick={()=>setManaging(open=>!open)}>{managing?'Collapse':'Manage'}</button></div>}
-  <div id={managementId} hidden={personalReady&&!managing}>
+ return <section className={'chatgpt-bridge ai-access'+(!managing?' ai-access-compact':'')} aria-label="AI access">
+  <div className="ai-access-summary"><small role={personalReady||ownerReady?'status':undefined}>{personalReady?'Personal AI ready · gpt-5-mini':ownerReady?'Owner AI ready · gpt-5-mini':'AI Assistant'}</small><button className="text-btn" aria-expanded={managing} aria-controls={managementId} onClick={()=>setManaging(open=>!open)}>{managing?'Collapse':personalReady||ownerReady?'Manage':'Set up'}</button></div>
+  <div className="ai-access-body" id={managementId} hidden={!managing}>
   <strong>Owner AI access</strong>
   {p.status?.authenticated?<div className="row"><small>Owner session active · budget protected</small>{p.mode!=='owner'&&<button onClick={p.selectOwner}>Use Owner AI</button>}<button disabled={busy} onClick={()=>submit('logout')}>Sign out of Owner AI</button></div>:p.status?.enabled?<details>
    <summary>Enter the owner access code</summary>

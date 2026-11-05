@@ -19,3 +19,42 @@
 @media(max-width:900px){.mode-switch button.active{font-size:0;gap:0}.welcome h1{font-size:35px}}
 .chatgpt-bridge{border:1px solid var(--line);border-radius:9px;padding:17px;margin:23px 0;background:var(--panel)}.bridge-heading{display:flex;align-items:center;gap:7px;color:var(--green)}.bridge-heading h3{font-family:Georgia,serif;font-size:17px;font-weight:400}.bridge-heading>span{margin-left:auto;font-size:8px;padding:3px 6px;background:var(--soft);border-radius:4px}.bridge-intro,.bridge-scope{font-size:10px;line-height:1.9;color:var(--muted);margin:12px 0}.bridge-presets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:15px 0}.bridge-presets button{font-size:9px;padding:9px 5px;line-height:1.5;background:var(--input)}.bridge-presets button:last-child{grid-column:1/-1}.bridge-presets button.active{background:var(--soft);border-color:var(--pistachio);color:var(--green)}.bridge-question{font-size:10px;display:block}.bridge-question textarea{width:100%;font-size:11px;margin-top:6px;resize:vertical}.bridge-toggle{display:flex;align-items:center;gap:7px;font-size:10px;margin-top:13px}.bridge-toggle input{accent-color:var(--green);margin:0}.bridge-actions{display:flex;flex-wrap:wrap;gap:7px;margin:15px 0 12px}.bridge-actions button{font-size:10px;flex:1;padding:9px 7px;white-space:normal}.bridge-actions svg{font-size:14px}.bridge-hint{font-size:10px;color:var(--muted);padding:10px 0}.bridge-status{font-size:11px;line-height:1.9;background:var(--soft);padding:10px;border-radius:5px;margin:12px 0}.bridge-preview{margin-top:12px}.bridge-preview label{font-size:9px;color:var(--muted)}.bridge-preview textarea{width:100%;font:11px/1.8 ui-monospace,monospace;margin-top:6px;min-height:230px;max-height:500px;resize:vertical}.bridge-preview button{font-size:10px;margin-top:7px}
 .ai-usage{font-size:9px;line-height:1.8;color:var(--muted);background:var(--input);padding:10px;border:1px solid var(--line);border-radius:5px;margin:10px 0}.chat-compose>div>small{max-width:85%;line-height:1.7}
+
+/* Optional AI access and a compact, question-first Ask AI layout. */
+.ai-access{flex-shrink:0;margin:8px 14px;padding:12px}
+.ai-access-compact{padding:8px 12px}
+.ai-access-summary{display:flex;align-items:center;gap:8px}
+.ai-access-summary small{flex:1;min-width:0;line-height:1.5}
+.ai-access-summary>button{flex-shrink:0}
+.ai-access-body:not([hidden]){max-height:min(42vh,360px);overflow-y:auto;overscroll-behavior:contain}
+.ai-access-summary+.ai-access-body:not([hidden]){margin-top:10px}
+.ai-access-body p{font-size:10px;line-height:1.8;margin:8px 0}
+.ai-access-body strong{display:block;font-size:11px;margin:8px 0}
+.ai-access-body form{margin:8px 0}
+.ai-access-body label{display:block;font-size:10px}
+.ai-access-body input{display:block;width:100%;margin:6px 0}
+.ai-access-body button{font-size:10px}
+.ai-access-body .row{flex-wrap:wrap}
+.chat-panel{padding:14px 16px}
+.chat-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.chat-heading h3{font-size:14px;font-weight:500;color:var(--green)}
+.chat-heading small{color:var(--muted);font-size:10px}
+.chat-context{display:flex;align-items:center;gap:10px;font-size:10px;color:var(--muted);margin:10px 0}
+.chat-context select{flex:1;min-width:0;width:0;font-size:10px;padding:6px 8px}
+.chat-panel .chat-compose{padding:0;border:0;margin:10px 0}
+.chat-panel .chat-compose textarea{display:block;min-height:72px;max-height:180px}
+.chat-panel .chat-compose>div{gap:10px}
+.chat-panel .chat-compose small{font-size:9px;max-width:none;min-width:0}
+.chat-panel .chat-presets{grid-template-columns:repeat(2,minmax(0,1fr));margin:12px 0}
+.chat-presets button{min-width:0;white-space:normal;overflow-wrap:anywhere;padding:8px 6px}
+.chat-disclosures{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px;margin:12px 0}
+.chat-disclosure{font-size:10px;min-width:0}
+.chat-disclosure summary{font-size:10px;line-height:1.7;color:var(--muted);cursor:pointer}
+.chat-disclosure[open]>summary{margin-bottom:8px}
+.chat-disclosure p,.chat-disclosure>small{font-size:10px;line-height:1.8;color:var(--muted)}
+.chat-disclosure p+p{margin-top:8px}
+.chat-disclosures .bridge-preview{margin-top:0}
+.chat-panel .chat-welcome{padding:0;text-align:left;margin:12px 0}
+.chat-welcome .quick-questions{margin-top:12px}
+.chat-fallback{margin:16px 0}
+.chat-fallback .chatgpt-bridge{margin:8px 0}
