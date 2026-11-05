@@ -1,11 +1,12 @@
 import {useId,useState} from 'react';
 export type BetaAIStatus={enabled:boolean;authenticated:boolean;state:'disabled'|'unavailable'|'authentication_required'|'session_invalid'|'session_expired'|'authenticated';csrfToken?:string};
-export type ByokStatus={enabled:boolean;state:'disabled'|'unavailable'|'available';csrfToken?:string};
+export type ByokStatus={enabled:boolean;state:'disabled'|'unavailable'|'available'|'local_unavailable';csrfToken?:string};
 export type AIMode='owner'|'byok'|'local'|'none';
 type Props={status?:BetaAIStatus;byok?:ByokStatus;mode:AIMode;hasKey:boolean;refresh:()=>Promise<void>;setKey:(key:string)=>void;clearKey:()=>void;selectOwner:()=>void;selectByok:()=>void};
 export default function BetaAIAccess(p:Props){
  const [code,setCode]=useState(''),[draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const [managing,setManaging]=useState(false),managementId=useId();
+ const [managing,setManaging]=useState(false),[replacing,setReplacing]=useState(false),managementId=useId();
+ const personalAvailable=p.byok?.enabled&&typeof window!=='undefined'&&window.location.protocol==='https:';
  const personalReady=p.hasKey&&p.mode==='byok'&&p.byok?.enabled;
  const ownerReady=p.mode==='owner'&&p.status?.authenticated;
  async function submit(action:'login'|'logout'){
@@ -31,9 +32,10 @@ export default function BetaAIAccess(p:Props){
   <strong>Use my own OpenAI API key</strong>
   <p>Your API key stays in this browser tab and is sent only when you make an AI request. It is not saved by Judu.</p>
   <p>ChatGPT Plus/Pro subscriptions do not automatically provide OpenAI API credit. API requests are billed to the account that issued your key; failed or timed-out requests may still be charged.</p>
-  {!p.byok?.enabled&&<p>{p.byok?.state==='unavailable'?'Personal-key AI is temporarily unavailable.':'Personal-key AI is disabled on this deployment.'}</p>}
-  {p.hasKey?<div className="row"><small>Key ready in this tab{p.mode==='byok'?' · selected':''}</small>{p.mode!=='byok'&&<button disabled={!p.byok?.enabled} onClick={p.selectByok}>Use this key</button>}<button onClick={()=>{p.clearKey();setDraft('');setError('');setManaging(false)}}>Remove key</button></div>:p.byok?.enabled?<form onSubmit={e=>{
-   e.preventDefault();setError('');try{if(window.location.protocol!=='https:')throw Error('Personal API keys require HTTPS.');p.setKey(draft);setDraft('');setManaging(false)}catch(error){setError(error instanceof Error?error.message:'Check your key.')}
+  {!personalAvailable&&<p>{p.byok?.state==='local_unavailable'?'Personal-key AI is unavailable on this local development backend. Use the configured HTTPS beta site to use your own key.':p.byok?.enabled?'Personal API keys require HTTPS.':p.byok?.state==='unavailable'?'Personal-key AI is temporarily unavailable.':'Personal-key AI is disabled on this deployment.'}</p>}
+  {p.hasKey&&<div className="row"><small>Key ready in this tab{p.mode==='byok'?' · selected':''}</small>{p.mode!=='byok'&&<button disabled={!personalAvailable} onClick={p.selectByok}>Use this key</button>}{personalAvailable&&<button onClick={()=>{setReplacing(open=>!open);setDraft('');setError('')}}>{replacing?'Cancel replacement':'Replace key'}</button>}<button onClick={()=>{p.clearKey();setDraft('');setError('');setReplacing(false);setManaging(false)}}>Remove key</button></div>}
+  {personalAvailable&&(!p.hasKey||replacing)?<form onSubmit={e=>{
+   e.preventDefault();setError('');try{if(window.location.protocol!=='https:')throw Error('Personal API keys require HTTPS.');p.setKey(draft);setDraft('');setReplacing(false);setManaging(false)}catch(error){setError(error instanceof Error?error.message:'Check your key.')}
   }}>
    <label>OpenAI API key<input type="password" aria-label="Your OpenAI API key" autoComplete="off" spellCheck={false} maxLength={503} value={draft} onChange={e=>setDraft(e.target.value)}/></label>
    <button className="primary" disabled={!draft.trim()}>Use key for this tab</button>

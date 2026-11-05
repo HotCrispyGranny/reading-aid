@@ -1,21 +1,47 @@
 import ChatGPTBridge from './ChatGPTBridge';
 import BetaAIAccess,{type BetaAIStatus,type ByokStatus,type AIMode} from './BetaAIAccess';
 import {aiHeaders} from '../lib/ai-access.mjs';
-import {useEffect,useRef,useState} from 'react';
+import {aiErrorMessage} from '../lib/ai-ui-state.mjs';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {ChatCircleText,Translate,Notebook,BookmarkSimple,ArrowUpRight,SpinnerGap,WarningCircle,X,PaperPlaneTilt,Check,DownloadSimple,Trash,Plus} from '@phosphor-icons/react';
 import type {DocState,Sentence,PageData,Anchor,Analysis,Note,Source,Message,AIUsage} from '../lib/types';
 import {label as displayLabel,noteOriginLabel} from '../lib/labels';
 import {buildContext} from '../lib/context';
 import {download,notesMarkdown} from '../lib/storage';
-type Props={doc:DocState;documentTitle?:string;current?:Sentence;manual?:Anchor;sentences:Sentence[];pages:PageData[];complete:boolean;configured:boolean;betaStatus?:BetaAIStatus;byokStatus?:ByokStatus;aiMode:AIMode;hasByokKey:boolean;getByokKey:()=>string;setByokKey:(key:string)=>void;clearByokKey:()=>void;selectOwner:()=>void;selectByok:()=>void;refreshAIStatus:()=>Promise<void>;patch:(f:(d:DocState)=>DocState)=>void;jump:(page:number,id?:string)=>void;onClose:()=>void;onNote:(n:Partial<Note>)=>void;tab:string;setTab:(t:string)=>void;width:number};
+type Props={doc:DocState;documentTitle?:string;current?:Sentence;manual?:Anchor;sentences:Sentence[];pages:PageData[];complete:boolean;configured:boolean;betaStatus?:BetaAIStatus;byokStatus?:ByokStatus;aiMode:AIMode;hasByokKey:boolean;byokRevision:number;getByokRevision:()=>number;getByokKey:()=>string;setByokKey:(key:string)=>void;clearByokKey:()=>void;selectOwner:()=>void;selectByok:()=>void;refreshAIStatus:()=>Promise<void>;patch:(f:(d:DocState)=>DocState)=>void;jump:(page:number,id?:string)=>void;onClose:()=>void;onNote:(n:Partial<Note>)=>void;tab:string;setTab:(t:string)=>void;width:number};
 const quick=['What does this sentence mean?','Explain the reasoning first, then the details.','How are these variables related?','Why did the authors choose this method?','What are the limits of this conclusion?','What does this suggest for my experiment?'];
 const categories=['全部','研究问题','实验方法','关键结果','局限性','我的疑问'];
+type AIOrigin={id:string;mode:AIMode;access:object;keyRevision:number;kind:'chat'|'analyze';controller:AbortController};
+type AIError={origin:AIOrigin;message:string;code?:string};
 export default function StudyPanel(p:Props){
  const [usage,setUsage]=useState<AIUsage>(),[settings,setSettings]=useState({model:'gpt-5-mini',maxOutputTokens:2500,pricing:{input:.25,output:2}});
  useEffect(()=>{fetch('/api/status').then(r=>r.json()).then(s=>{if(s.model)setSettings({model:s.model,maxOutputTokens:s.maxOutputTokens||2500,pricing:s.pricing||{input:.25,output:2}})}).catch(()=>{})},[]);
  const current=p.manual?{id:`manual-${p.manual.page}-${p.manual.text}`,page:p.manual.page,text:p.manual.text,context:p.manual.text,runs:[],blockId:'manual',complete:true}:p.current;
- const [detail,setDetail]=useState('short'),[loading,setLoading]=useState(false),[error,setError]=useState(''),[chatError,setChatError]=useState(''),[chatLoading,setChatLoading]=useState(false),[question,setQuestion]=useState(''),[scope,setScope]=useState('nearby'),[basic,setBasic]=useState(false),[word,setWord]=useState(''),[wordMeaning,setWordMeaning]=useState(''),[wordLoading,setWordLoading]=useState(false),[wordError,setWordError]=useState(''),[filter,setFilter]=useState('全部'),[query,setQuery]=useState(''),[showMarks,setShowMarks]=useState(false),[translating,setTranslating]=useState(false),[translationError,setTranslationError]=useState('');
+ const [detail,setDetail]=useState('short'),[loadingState,setLoading]=useState(false),[errorState,setError]=useState<AIError>(),[chatErrorState,setChatError]=useState<AIError>(),[chatLoadingState,setChatLoading]=useState(false),[question,setQuestion]=useState(''),[scope,setScope]=useState('nearby'),[basic,setBasic]=useState(false),[word,setWord]=useState(''),[wordMeaning,setWordMeaning]=useState(''),[wordLoading,setWordLoading]=useState(false),[wordError,setWordError]=useState(''),[filter,setFilter]=useState('全部'),[query,setQuery]=useState(''),[showMarks,setShowMarks]=useState(false),[translating,setTranslating]=useState(false),[translationError,setTranslationError]=useState('');
  const analysisAbort=useRef<AbortController|null>(null),chatAbort=useRef<AbortController|null>(null),wordAbort=useRef<AbortController|null>(null),request=useRef(0),wordRequest=useRef(0),chatBottom=useRef<HTMLDivElement>(null);
+ // The revision is an opaque tab-memory counter, never a key/fingerprint.
+ // Access objects contain no credential; identity changes invalidate old jobs
+ // during rendering, before effect cleanup or an ignored abort can race us.
+ const access=useMemo(()=>({mode:p.aiMode}),[p.doc.id,p.aiMode,p.byokRevision,p.hasByokKey,p.configured,p.betaStatus?.enabled,p.betaStatus?.authenticated,p.betaStatus?.state,p.betaStatus?.csrfToken,p.byokStatus?.enabled,p.byokStatus?.state,p.byokStatus?.csrfToken]);
+ const latestAccess=useRef(access);latestAccess.current=access;
+ const analysisOrigin=useRef<AIOrigin|null>(null),chatOrigin=useRef<AIOrigin|null>(null);
+ function belongs(origin:AIOrigin|null|undefined){return !!origin&&origin.access===latestAccess.current&&origin.keyRevision===p.getByokRevision()&&(origin.kind==='chat'?chatOrigin:analysisOrigin).current===origin}
+ function isCurrent(origin:AIOrigin|null|undefined){return belongs(origin)&&!origin!.controller.signal.aborted}
+ const loading=loadingState&&isCurrent(analysisOrigin.current),chatLoading=chatLoadingState&&isCurrent(chatOrigin.current);
+ const error=errorState&&belongs(errorState.origin)?errorState.message:'',chatError=chatErrorState&&belongs(chatErrorState.origin)?chatErrorState.message:'';
+ function begin(kind:AIOrigin['kind']){
+  const ref=kind==='chat'?chatOrigin:analysisOrigin;ref.current?.controller.abort();
+  const origin={id:crypto.randomUUID(),mode:latestAccess.current.mode,access:latestAccess.current,keyRevision:p.getByokRevision(),kind,controller:new AbortController()};ref.current=origin;
+  (kind==='chat'?chatAbort:analysisAbort).current=origin.controller;return origin;
+ }
+ function failure(origin:AIOrigin,e:any):AIError{return {origin,message:aiErrorMessage(e,origin.mode),code:e.code}}
+ useEffect(()=>{
+  // Clear only obsolete state; a new job may already belong to this access.
+  for(const ref of [analysisOrigin,chatOrigin])if(ref.current?.access!==access)ref.current?.controller.abort();
+  setLoading(value=>isCurrent(analysisOrigin.current)&&value);setChatLoading(value=>isCurrent(chatOrigin.current)&&value);
+  setError(value=>value&&belongs(value.origin)?value:undefined);setChatError(value=>value&&belongs(value.origin)?value:undefined);setUsage(undefined);
+  return()=>{for(const ref of [analysisOrigin,chatOrigin])if(ref.current?.access===access)ref.current?.controller.abort()};
+ },[access]);
  const translationAbort=useRef<AbortController|null>(null),translationRequest=useRef(0);
  const translation=current?p.doc.translations?.[current.id]:undefined;
  useEffect(()=>{translationAbort.current?.abort();translationRequest.current++;setTranslating(false);setTranslationError('');return()=>{translationAbort.current?.abort();translationRequest.current++}},[current?.id,p.doc.id]);
@@ -24,23 +50,25 @@ export default function StudyPanel(p:Props){
   try{const result=await api('translate',{text:current.text},controller.signal);if(version!==translationRequest.current||controller.signal.aborted)return;p.patch(d=>({...d,translations:{...d.translations,[current.id]:result}}))}catch(e:any){if(e.name!=='AbortError'&&version===translationRequest.current)setTranslationError(e.message)}finally{if(version===translationRequest.current)setTranslating(false)}
  }
  const cacheKey=current?'phase1:'+settings.model+':'+current.id+':'+detail:'';const analysis:Analysis|undefined=p.doc.analyses[cacheKey];
- useEffect(()=>{analysisAbort.current?.abort();wordAbort.current?.abort();request.current++;wordRequest.current++;setLoading(false);setError('');setWord('');setWordMeaning('');setWordError('');setWordLoading(false)},[current?.id,detail,p.doc.id]);
+ useEffect(()=>{analysisAbort.current?.abort();wordAbort.current?.abort();request.current++;wordRequest.current++;setLoading(false);setError(undefined);setWord('');setWordMeaning('');setWordError('');setWordLoading(false)},[current?.id,detail,p.doc.id]);
  useEffect(()=>()=>{analysisAbort.current?.abort();chatAbort.current?.abort();wordAbort.current?.abort()},[]);
- useEffect(()=>{chatAbort.current?.abort();setChatLoading(false);setChatError('');setQuestion('')},[p.doc.id]);
+ useEffect(()=>{chatAbort.current?.abort();setChatLoading(false);setChatError(undefined);setQuestion('')},[p.doc.id]);
  const previousMessageCount=useRef(p.doc.messages.length);
  useEffect(()=>{const added=p.doc.messages.length>previousMessageCount.current;previousMessageCount.current=p.doc.messages.length;if(added||chatLoading)chatBottom.current?.scrollIntoView({block:'nearest'})},[p.doc.messages.length,chatLoading]);
- async function api(task:string,payload:any,signal:AbortSignal){
-  const headers:Record<string,string>=task==='translate'?{'Content-Type':'application/json'}:aiHeaders(p.aiMode,p.aiMode==='byok'?p.byokStatus?.csrfToken:p.betaStatus?.csrfToken,p.aiMode==='byok'?p.getByokKey():undefined,crypto.randomUUID(),window.location.protocol==='https:');
+ async function api(task:string,payload:any,signal:AbortSignal,origin?:AIOrigin){
+  const mode=origin?.mode??p.aiMode;
+  const headers:Record<string,string>=task==='translate'?{'Content-Type':'application/json'}:aiHeaders(mode,mode==='byok'?p.byokStatus?.csrfToken:p.betaStatus?.csrfToken,mode==='byok'?p.getByokKey():undefined,origin?.id??crypto.randomUUID(),window.location.protocol==='https:');
   const response=await fetch('/api/'+task,{method:'POST',headers,body:JSON.stringify({...payload,...(task==='translate'?{}:{document:{title:p.documentTitle||p.doc.name,fileName:p.doc.name,page:current?.page}})}),signal});
-  const data=await response.json();if(!response.ok){if(task!=='translate'&&(response.status===401||data.code==='AI_DISABLED'||data.code==='BYOK_DISABLED'))await p.refreshAIStatus();throw Error(data.error||'Request failed')}return data;
+  const data=await response.json();if(origin&&!isCurrent(origin))throw Object.assign(Error('Canceled'),{name:'AbortError'});
+  if(!response.ok){if(task!=='translate'&&(response.status===401||data.code==='AI_DISABLED'||data.code==='BYOK_DISABLED'))await p.refreshAIStatus();throw Object.assign(Error(data.error||'Request failed'),{code:data.code})}return data;
  }
  async function analyze(){
-  if(!current)return;analysisAbort.current?.abort();const controller=new AbortController();analysisAbort.current=controller;const version=++request.current;setLoading(true);setError('');
+  if(!current||!p.configured)return;const origin=begin('analyze'),version=++request.current;setLoading(true);setError(undefined);
   const ctx=buildContext('nearby',current,p.sentences,p.pages,'',p.complete);
   // Current source must be first; neighbour sources are context only.
   const rest=ctx.sources.filter(s=>s.sentenceId!==current.id).slice(0,7);const sources=[{id:'S1',page:current.page,text:current.text,sentenceId:current.id},...rest.map((s,i)=>({...s,id:`S${i+2}`}))];
-  try{const data=await api('analyze',{sources,coverage:ctx.coverage,detail},controller.signal);if(version!==request.current||controller.signal.aborted)return;setUsage(data.usage);p.patch(d=>({...d,analyses:{...d.analyses,[cacheKey]:data.analysis}}))}
-  catch(e:any){if(e.name!=='AbortError'&&version===request.current)setError(e.message)}finally{if(version===request.current)setLoading(false)}
+  try{const data=await api('analyze',{sources,coverage:ctx.coverage,detail},origin.controller.signal,origin);if(version!==request.current||!isCurrent(origin))return;setUsage(data.usage);p.patch(d=>({...d,analyses:{...d.analyses,[cacheKey]:data.analysis}}))}
+  catch(e:any){if(e.name!=='AbortError'&&version===request.current&&isCurrent(origin))setError(failure(origin,e))}finally{if(version===request.current&&isCurrent(origin))setLoading(false)}
  }
  async function lookup(w:string){
   setWord(w);setWordMeaning('');setWordError('');const known=analysis?.terms.find(t=>t.term.toLowerCase()===w.toLowerCase());if(known){setWordMeaning(known.meaning);return}
@@ -49,13 +77,13 @@ export default function StudyPanel(p:Props){
  }
  function saveWord(w:string,meaning:string){if(!current)return;p.patch(d=>({...d,words:d.words.some(x=>x.word===w&&x.quote===current.text)?d.words:[...d.words,{id:crypto.randomUUID(),word:w,meaning,quote:current.text,page:current.page}]}))}
  async function send(text=question){
-  if(!p.configured){setChatError('AI access is unavailable. Check beta access or the server configuration.');return}
-  if(chatLoading||!text.trim())return;const ctx=buildContext(scope,current,p.sentences,p.pages,text,p.complete);if(!ctx.sources.length){setChatError('No text is available in this scope. Select a sentence or wait for indexing.');return}
-  const history=p.doc.messages.slice(-4).map(m=>({role:m.role,content:m.content.slice(0,1500)}));p.patch(d=>({...d,messages:[...d.messages,{id:crypto.randomUUID(),role:'user',content:text,coverage:ctx.coverage}]}));setQuestion('');setChatLoading(true);setChatError('');
-  const controller=new AbortController();chatAbort.current=controller;
-  try{const data=await api('chat',{...ctx,question:text,history},controller.signal);if(controller.signal.aborted)return;setUsage(data.usage);
+  if(chatLoading||!text.trim())return;const origin=begin('chat');setChatLoading(false);
+  if(!p.configured){setChatError(failure(origin,Error('AI access is unavailable. Use Set up or Manage to review access.')));return}
+  const ctx=buildContext(scope,current,p.sentences,p.pages,text,p.complete);if(!ctx.sources.length){setChatError(failure(origin,Error('No text is available in this scope. Select a sentence or wait for indexing.')));return}
+  const history=p.doc.messages.slice(-4).map(m=>({role:m.role,content:m.content.slice(0,1500)}));p.patch(d=>({...d,messages:[...d.messages,{id:crypto.randomUUID(),role:'user',content:text,coverage:ctx.coverage}]}));setQuestion('');setChatLoading(true);setChatError(undefined);
+  try{const data=await api('chat',{...ctx,question:text,history},origin.controller.signal,origin);if(!isCurrent(origin))return;setUsage(data.usage);
    p.patch(d=>({...d,messages:[...d.messages,{id:crypto.randomUUID(),role:'assistant',content:data.answer,sources:data.sources,coverage:ctx.coverage,usage:data.usage}]}));
-  }catch(e:any){if(e.name!=='AbortError'){setChatError(e.message);setQuestion(text)}}finally{if(!controller.signal.aborted)setChatLoading(false)}
+  }catch(e:any){if(e.name!=='AbortError'&&isCurrent(origin)){setChatError(failure(origin,e));setQuestion(text)}}finally{if(isCurrent(origin))setChatLoading(false)}
  }
  const estimatedInputTokens=Math.ceil((new TextEncoder().encode(JSON.stringify(buildContext(scope,current,p.sentences,p.pages,question,p.complete))).length+p.doc.messages.slice(-4).reduce((n,m)=>n+new TextEncoder().encode(m.content.slice(0,1500)).length,0)+6000)/3);
  const estimatedMaxUSD=settings.pricing.input==null||settings.pricing.output==null?null:(estimatedInputTokens*settings.pricing.input+settings.maxOutputTokens*settings.pricing.output)/1e6;
@@ -63,7 +91,7 @@ export default function StudyPanel(p:Props){
  const sourceLink=(s:Source)=><button className="source" key={s.id} onClick={()=>p.jump(s.page,s.sentenceId)}><ArrowUpRight size={13}/> p. {s.page} · {s.id}<span>{s.text}</span></button>;
  return <aside className="study-panel" style={{width:p.width}}>
   <div className="study-header"><div><span className="eyebrow">STUDY COMPANION</span><h2>Read. Understand. Reflect.</h2></div><button className="icon-btn" aria-label="Collapse study panel" onClick={p.onClose}><X size={18}/></button></div>
-  {(p.betaStatus||p.byokStatus)&&<BetaAIAccess status={p.betaStatus} byok={p.byokStatus} mode={p.aiMode} hasKey={p.hasByokKey} setKey={p.setByokKey} clearKey={p.clearByokKey} selectOwner={p.selectOwner} selectByok={p.selectByok} refresh={p.refreshAIStatus}/>}
+  <BetaAIAccess status={p.betaStatus} byok={p.byokStatus} mode={p.aiMode} hasKey={p.hasByokKey} setKey={p.setByokKey} clearKey={p.clearByokKey} selectOwner={p.selectOwner} selectByok={p.selectByok} refresh={p.refreshAIStatus}/>
   <div className="panel-tabs">{[['analysis','Translate','translate'],['chat','Ask AI','chat'],['notes','Notes','note'],['words','Vocabulary','word']].filter(([id])=>id!=='chat'||p.configured||p.doc.messages.length>0).map(([id,label])=><button key={id} onClick={()=>p.setTab(id)} className={p.tab===id?'active':''}>{id==='analysis'?<Translate/>:id==='chat'?<ChatCircleText/>:id==='notes'?<Notebook/>:<BookmarkSimple/>}{label}{id==='notes'&&p.doc.notes.length>0&&<small>{p.doc.notes.length}</small>}</button>)}</div>
   {p.tab==='analysis'&&<div className="panel-scroll analysis-panel">
    <div className="section-label">CURRENT SENTENCE <span>{current?`Page ${current.page}`:'None selected'}</span></div>
@@ -79,7 +107,7 @@ export default function StudyPanel(p:Props){
     {current&&<a className="external-translate" href={'https://translate.google.com/?sl=en&tl=zh-CN&text='+encodeURIComponent(current.text)+'&op=translate'} target="_blank" rel="noopener noreferrer">Open in Google Translate <ArrowUpRight size={12}/></a>}
    </div>
    <ChatGPTBridge title={p.documentTitle} fileName={p.doc.name} current={current} sentences={p.sentences} complete={p.complete}/>
-   {p.configured&&<details className="advanced-ai" open><summary>{p.aiMode==='byok'?'AI study tools · your OpenAI key':p.betaStatus?'Owner AI study tools · budget protected':'Local AI study tools · explicit requests only'}</summary>{usage&&<UsageDetails usage={usage}/>}
+   {p.configured&&<details className="advanced-ai" open><summary>{p.aiMode==='byok'?'AI study tools · your OpenAI key':p.aiMode==='owner'?'Owner AI study tools · budget protected':'Local AI study tools · explicit requests only'}</summary>{usage&&<UsageDetails usage={usage}/>}
    <div className="analysis-controls"><div className="segmented"><button className={detail==='short'?'selected':''} onClick={()=>setDetail('short')}>Brief</button><button className={detail==='long'?'selected':''} onClick={()=>setDetail('long')}>Detailed</button></div><button className="primary" disabled={!current||loading} onClick={analyze}>{loading?<SpinnerGap className="spin"/>:<Translate/>}{loading?'Analyzing…':analysis?'Analyze again':'Analyze sentence'}</button></div>
    {error&&<div className="error-box" role="alert"><WarningCircle/>{error}<button onClick={analyze}>Retry</button></div>}
    {loading&&<div className="ai-loading"><SpinnerGap className="spin"/> Analyzing the selected text in context…</div>}
@@ -100,12 +128,12 @@ export default function StudyPanel(p:Props){
    <div className="bridge-presets chat-presets" aria-label="AI question presets">{[['Explain Simply','用中文简明解释这句话，保留重要英文术语。'],['Scientific Mechanism','逐步解释这句话涉及的科学原理、物理机制和数学关系。'],['Experimental Design','分析实验方法、变量、对照、测量手段及设计理由。'],['Critical Analysis','区分原文与推断，分析假设、局限、误差和替代解释。'],['Technical Vocabulary','解释这句话中重要术语和有意义的专业短语。'],['Generate Academic Notes','生成结构化双语学术笔记，包含概念、术语和有依据的公式及问题。']].map(([label,q])=><button disabled={chatLoading} key={label} onClick={()=>send(q)}>{label}</button>)}</div>
    <div className="chat-disclosures">
     <details className="bridge-preview chat-disclosure"><summary>Review AI context</summary><textarea aria-label="AI context preview" readOnly rows={8} value={JSON.stringify({document:{title:p.documentTitle||p.doc.name,page:current?.page,section:'Unavailable'},...buildContext(scope,current,p.sentences,p.pages,question,p.complete),history:p.doc.messages.slice(-4).map(m=>({role:m.role,content:m.content.slice(0,1500)}))},null,2)}/></details>
-    <details className="chat-disclosure"><summary>How AI uses context</summary><p>Chinese scientific explanations. Only Send or a preset calls OpenAI. {p.aiMode==='byok'?'Billed to your OpenAI API key; server limits apply.':p.betaStatus?'Owner access only; owner budget limits apply.':'Paid requests are disabled in production.'}</p><p>Sending a question shares the selected scope, document title/page and up to four recent messages with OpenAI. Whole-paper retrieval is bounded and may miss evidence.</p></details>
+    <details className="chat-disclosure"><summary>How AI uses context</summary><p>Chinese scientific explanations. Only Send or a preset calls OpenAI. {p.aiMode==='byok'?'Billed to your OpenAI API key; server limits apply.':p.aiMode==='owner'?'Owner access only; owner budget limits apply.':p.aiMode==='local'?'Local AI uses the development server key; personal-key AI is unavailable on this backend.':'AI is optional. Use Set up to review available access.'}</p><p>Sending a question shares the selected scope, document title/page and up to four recent messages with OpenAI. Whole-paper retrieval is bounded and may miss evidence.</p></details>
     <details className="chat-disclosure"><summary>Token / cost estimate</summary><small>{p.configured?`${settings.model} · rough input estimate: ${estimatedInputTokens} tokens; output cap ${settings.maxOutputTokens}. Approx. ${estimatedMaxUSD==null?'unknown cost':'$'+estimatedMaxUSD.toFixed(4)} per request at configured rates; not a budget limit.`:'AI not configured · Copy & Open ChatGPT remains available.'}</small></details>
    </div>
    {!p.doc.messages.length&&<details className="chat-disclosure chat-welcome"><summary>More question ideas</summary><ChatCircleText size={36} weight="thin"/><h3>Let curiosity lead</h3><p>From variable relationships to experimental methods,<br/>look for answers in the paper.</p><div className="quick-questions">{[...quick,'Explain the technical vocabulary and meaningful phrases in this sentence.','Generate structured bilingual academic notes from this context.'].map(q=><button key={q} disabled={chatLoading} onClick={()=>send(q)}>{q}<ArrowUpRight/></button>)}</div></details>}
    {p.doc.messages.map((m:Message)=><article className={'message '+m.role} key={m.id}><div className="message-role">{m.role==='user'?'YOUR QUESTION':'READING ASSISTANT'}<span>{m.coverage}</span></div><p>{m.content}</p>{m.usage&&<UsageDetails usage={m.usage}/ >}{m.sources?.length? <div className="sources">{m.sources.map(sourceLink)}</div>:m.role==='assistant'?<small>No verifiable paper citation was supplied. Please check the source.</small>:null}{m.role==='assistant'&&<button className="text-btn" onClick={()=>p.onNote({body:m.content,origin:'ai',text:m.sources?.[0]?.text||'',page:m.sources?.[0]?.page||p.doc.page,rects:[],sentenceId:m.sources?.[0]?.sentenceId})}><Notebook size={14}/>Edit and save as note</button>}</article>)}
-   {chatLoading&&<div className="ai-loading"><SpinnerGap className="spin"/>Reading the selected context…<button onClick={()=>{chatAbort.current?.abort();setChatLoading(false);setChatError('Canceled. You can send the question again.')}}>Cancel</button></div>}
+   {chatLoading&&<div className="ai-loading"><SpinnerGap className="spin"/>Reading the selected context…<button onClick={()=>{chatAbort.current?.abort();setChatLoading(false);setChatError(chatOrigin.current?failure(chatOrigin.current,Error('Canceled. You can send the question again.')):undefined)}}>Cancel</button></div>}
    {chatError&&<div className="error-box" role="alert">{chatError}<button onClick={()=>send()}>Retry</button></div>}<details className="chat-disclosure chat-fallback"><summary>Use ChatGPT without an API key</summary><ChatGPTBridge title={p.documentTitle} fileName={p.doc.name} current={current} sentences={p.sentences} complete={p.complete}/></details><div ref={chatBottom}/>
   </div>}
   {p.tab==='notes'&&<><div className="notes-tools"><div className="row"><h3>Your reading notes <small>{p.doc.notes.length}</small></h3><button className="icon-btn" aria-label="Export Markdown" title="Export notes as Markdown" onClick={()=>download(p.doc.name+'.md',new Blob([notesMarkdown(p.doc)],{type:'text/markdown;charset=utf-8'}))}><DownloadSimple/></button></div><input aria-label="Search notes and highlights" placeholder="Search quotes and notes…" value={query} onChange={e=>setQuery(e.target.value)}/><div className="filter-row">{categories.map(c=><button className={filter===c?'active':''} key={c} onClick={()=>setFilter(c)}>{displayLabel(c)}</button>)}</div><div className="row"><button className="text-btn" onClick={()=>p.onNote({text:current?.text||'',page:current?.page||p.doc.page,rects:[],sentenceId:current?.id})}><Plus/>Add note</button><button className="text-btn" onClick={()=>setShowMarks(!showMarks)}>{showMarks?'Show notes':`Manage highlights (${p.doc.marks.length})`}</button></div></div><div className="panel-scroll notes-list">
