@@ -3,12 +3,14 @@ import {itemRect} from './highlight-geometry.mjs';
 /** Presentation only: retain the exact source rectangles, then join small empty
  * spaces between adjacent selected runs/lines within the same page and column.
  * A compound union path strokes only the exterior, never each source box.
- * @param {number|null} gutter */
+ * @param {number|number[]|null} gutter */
 export function focusRegions(rects,gutter=null,obstacles=[]){
  const groups=new Map();
  for(const r of rects){
   if(!(r.w>0&&r.h>0)||![r.x,r.y,r.w,r.h].every(Number.isFinite))continue;
-  const column=gutter==null?'full':r.x+r.w<=gutter?'left':r.x>=gutter?'right':'full';
+  const cuts=gutter==null?[]:Array.isArray(gutter)?gutter:[gutter];
+  const index=cuts.filter(x=>r.x>=x).length;
+  const column=!cuts.length||cuts.some(x=>r.x<x&&r.x+r.w>x)?'full':cuts.length===1?['left','right'][index]:['left','middle','right'][index];
   const key=`${r.page}:${column}`;
   if(!groups.has(key))groups.set(key,{page:r.page,column,rects:[]});
   groups.get(key).rects.push({...r});
@@ -47,10 +49,38 @@ export function unselectedRects(geometry,runs,page){
   const selected=runs.filter(r=>r.page===page&&r.itemIndex===itemIndex).sort((a,b)=>a.start-b.start);
   let start=0;
   for(const r of [...selected,{start:g.advances.length-1,end:g.advances.length-1}]){
-   if(r.start>start){const rect=itemRect(g,start,r.start,page);if(rect?.w)rects.push(rect)}
+   if(r.start>start){
+    // A boundary space is empty PDF background, not neighbouring ink. Keep
+    // the original offsets when trimming that space from stroke obstacles.
+    let from=start,to=r.start;
+    if(typeof g.text==='string'){while(from<to&&/\s/u.test(g.text[from]))from++;while(to>from&&/\s/u.test(g.text[to-1]))to--}
+    const rect=itemRect(g,from,to,page);if(rect?.w)rects.push(rect);
+   }
    start=Math.max(start,r.end);
   }
  });return rects;
+}
+
+/** Clip an exterior stroke to its original column; never join column outlines.
+ * @param {number|number[]|null} gutter */
+export function focusColumnBounds(gutter,column,width){
+ const cuts=gutter==null?[]:Array.isArray(gutter)?gutter:[gutter];
+ const index=(cuts.length===1?['left','right']:['left','middle','right']).indexOf(column);
+ return !cuts.length||column==='full'||index<0?{x:0,width}:{x:cuts[index-1]??0,width:(cuts[index]??width)-(cuts[index-1]??0)};
+}
+
+export const FOCUS_OUTLINE_STROKE=4;
+export const FOCUS_OUTLINE_CLEARANCE=1;
+/** Exterior-only stroke clip: the page minus selected geometry and nearby ink.
+ * Half of a 4 CSS px stroke is outside; excluding a one-pixel raster fringe leaves
+ * the existing 1 CSS px border, separated from antialiased/hinted glyph edges. This
+ * clearance is converted to PDF units, never added as a CSS text/paragraph box. */
+export function focusOutlineClip(shapes,obstacles,width,height,scale=1){
+ const selected=shapes.flatMap(s=>s.pieces),safeScale=Math.max(.01,scale);
+ const reach=(FOCUS_OUTLINE_STROKE/2+.5)/safeScale,padding=FOCUS_OUTLINE_CLEARANCE/safeScale;
+ const nearby=obstacles.filter(o=>selected.some(r=>r.page===o.page&&intersects(o,{...r,x:r.x-reach,y:r.y-reach,w:r.w+reach*2,h:r.h+reach*2})));
+ const protectedInk=selected.map(r=>({...r,x:r.x-padding,y:r.y-padding,w:r.w+padding*2,h:r.h+padding*2}));
+ return `M0 0 L${width} 0 L${width} ${height} L0 ${height} Z `+unionOutline([...protectedInk,...nearby]);
 }
 
 // Coordinate-compressed rectangle union. Interior edges disappear; disconnected

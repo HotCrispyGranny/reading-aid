@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {sentenceRanges,extractPage,joinContinuations,stepSentence} from '../src/lib/sentences.mjs';
+import {sentenceRanges,extractPage,joinContinuations,stepSentence,resolveSentenceId,sentenceAtOffset} from '../src/lib/sentences.mjs';
 const text=t=>sentenceRanges(t).map(r=>t.slice(r.start,r.end));
 test('abbreviations, decimals, citations and units do not break sentences',()=>{
  assert.deepEqual(text('Dr. Wu et al. measured 3.5 mL (Fig. 2). [12, 13] The next test used 1.0 m. Each result was stable.'),['Dr. Wu et al. measured 3.5 mL (Fig. 2). [12, 13]','The next test used 1.0 m.','Each result was stable.']);
@@ -306,4 +306,133 @@ test('small caption items and ligatures stay in their physical line and caption 
  assert.equal(captions.length,1);
  assert.equal(captions[0].text,'Fig. 13. CFD modelling results: full-scale efficiency parameter based on measured velocities in the tank.');
  assert.deepEqual(captions[0].runs.map(r=>r.itemIndex),[1,2,3,4,5]);
+});
+
+test('reference abbreviations and terminal et al keep genuine sentence boundaries',()=>{
+ assert.deepEqual(text('See Sec. 3, Vol. 2 and Ref. 4. It agrees.'),['See Sec. 3, Vol. 2 and Ref. 4.','It agrees.']);
+ assert.deepEqual(text('Smith et al. The next experiment agrees.'),['Smith et al.','The next experiment agrees.']);
+ assert.deepEqual(text('Smith et al. [12] The next experiment agrees.'),['Smith et al. [12]','The next experiment agrees.']);
+ assert.deepEqual(text('Smith et al. reported a result in Fig. 9. It agrees.'),['Smith et al. reported a result in Fig. 9.','It agrees.']);
+ assert.deepEqual(text('The interval was 0.28 s. The pH was 5.5 at 25 °C.'),['The interval was 0.28 s.','The pH was 5.5 at 25 °C.']);
+});
+
+test('Unicode closing punctuation and adjacent citation runs retain exact boundaries',()=>{
+ assert.deepEqual(text('The authors wrote «It worked.» [2–4] Next came validation.'),['The authors wrote «It worked.» [2–4]','Next came validation.']);
+ assert.deepEqual(text('Did it work?! Yes… It did.'),['Did it work?!','Yes…','It did.']);
+ assert.deepEqual(text('We used 3.0 × 10⁻⁵ mol/L (Eq. (3)). It worked.'),['We used 3.0 × 10⁻⁵ mol/L (Eq. (3)).','It worked.']);
+});
+
+test('ambiguous hard-hyphen compounds are preserved while known broken words and soft hyphens join',()=>{
+ for(const [left,right,word] of [['mass-','transfer','mass-transfer'],['state-','of-the-art','state-of-the-art'],['vapor-','liquid','vapor-liquid'],['novel-','material','novel-material'],['mea-','sured','measured'],['unusual\u00ad','term','unusualterm'],['HYDRO\u00ad','DYNAMIC','HYDRODYNAMIC']]){
+  const items=[item('The '+left,40,70),item(right+' result was stable.',40,85)];
+  const [sentence]=extractPage(items,612,792,1).sentences;
+  assert.equal(sentence.text,'The '+word+' result was stable.');
+  assert.equal(sentence.runs.map(r=>items[r.itemIndex].str.slice(r.start,r.end)).join(''),'The '+left+right+' result was stable.');
+ }
+});
+
+test('reliably separated three-column prose retains all words and column reading order',()=>{
+ const items=[];
+ for(let row=0;row<4;row++)for(let col=0;col<3;col++)items.push(item(`Column ${col} row ${row} is stable.`,30+col*195,70+row*15,170));
+ const page=extractPage(items,612,792,1);
+ assert.deepEqual(page.sentences.map(s=>s.text),[0,1,2].flatMap(col=>[0,1,2,3].map(row=>`Column ${col} row ${row} is stable.`)));
+ assert.equal(new Set(page.sentences.flatMap(s=>s.runs.map(r=>r.itemIndex))).size,items.length);
+});
+
+test('a spanning line cannot cause same-baseline column text to disappear',()=>{
+ const items=[];
+ for(let row=0;row<4;row++)for(const x of [40,320])items.push(item('Independent scientific measurements remain stable.',x,70+row*15,230));
+ items.push(item('A wide section heading crosses the gutter',40,70,500));
+ const page=extractPage(items,612,792,1),indices=new Set(page.sentences.flatMap(s=>s.runs.map(r=>r.itemIndex)));
+ for(let i=0;i<items.length;i++)assert.ok(indices.has(i),'Lost source item '+i);
+});
+
+test('large-font letter fragments join using scale-aware spacing without swallowing word gaps',()=>{
+ const items=[];let x=40;
+ for(const word of ['It','worked.']){
+  for(const ch of word){const i=item(ch,x,70,8);i.height=18;i.transform=[18,0,0,18,x,722];items.push(i);x+=10}
+  x+=4;
+ }
+ const [sentence]=extractPage(items,612,792,1).sentences;
+ assert.equal(sentence.text,'It worked.');
+ assert.equal(sentence.runs.length,items.length);
+});
+
+test('upright UserUnit/CropBox transforms preserve reading order, item indices and sentence ids',()=>{
+ const items=[];for(let r=0;r<4;r++)for(const x of [40,320])items.push(item(`${x===40?'Left':'Right'} scientific observation ${r} was stable.`,x,100+r*15,230));
+ const normal=extractPage(items,612,792,1);
+ for(const [w,h,transform]of [[1224,1584,[2,0,0,-2,0,1584]],[572,752,[1,0,0,-1,-20,772]]]){
+  const projected=extractPage(items,w,h,1,transform);
+  assert.deepEqual(projected.sentences.map(s=>[s.id,s.text,s.runs]),normal.sentences.map(s=>[s.id,s.text,s.runs]));
+ }
+});
+
+test('three-column continuations preserve source order and progressive parsing snapshots',()=>{
+ const items=[];for(let row=0;row<4;row++)for(let c=0;c<3;c++)items.push(item(c===1&&row===0?'under controlled conditions. It agrees.':`Column ${c} observation ${row} was stable.`,30+c*195,70+row*15,170));
+ items.push(item('The first column ended with a measurement',30,140,170));
+ items.push(item('The final observation was made',420,140,170));
+ const first=extractPage(items,612,792,1),nextItems=[item('under constant temperature.',40,70)];
+ const before=joinContinuations([first]),snapshot=JSON.stringify(before),second=extractPage(nextItems,612,792,2);
+ const after=joinContinuations([first,second]);
+ assert.ok(after.some(s=>s.text==='The first column ended with a measurement under controlled conditions.'));
+ const last=after.find(s=>s.text==='The final observation was made under constant temperature.');assert.ok(last);
+ assert.equal(last.id,before.at(-1).id);assert.deepEqual(last.runs.map(r=>r.page),[1,2]);assert.equal(JSON.stringify(before),snapshot);
+ for(const s of after)for(const r of s.runs){const it=(r.page===1?items:nextItems)[r.itemIndex];assert.ok(r.start>=0&&r.end<=it.str.length&&r.end>r.start)}
+});
+
+test('superscript Unicode citations and page references do not swallow the next sentence',()=>{
+ assert.deepEqual(text('See p. 3 for details.²⁰ Furthermore, it agreed.¹²–¹⁴ Next came validation.'),['See p. 3 for details.²⁰','Furthermore, it agreed.¹²–¹⁴','Next came validation.']);
+});
+
+test('old sentence ids resolve by original source offset after merges, without text matching',()=>{
+ const source='See Sec. 3 for the result. It agrees.';
+ const sentences=extractPage([item(source,40,70)],612,792,1).sentences;
+ const oldId='p1-i0-'+source.indexOf('3 for');
+ assert.equal(resolveSentenceId(sentences,oldId),sentences[0]);
+ assert.equal(stepSentence(sentences,oldId,1,1),sentences[1]);
+ const a=extractPage([item('The value was ap-',40,700)],612,792,1),b=extractPage([item('proximately constant. It agrees.',40,70)],612,792,2);
+ const joined=joinContinuations([a,b]);assert.equal(resolveSentenceId(joined,b.sentences[0].id),joined[0]);
+ for(const id of ['unknown','p1-i999-0','p1-i0-9000','p1-i0-90071992547409930'])assert.equal(resolveSentenceId(sentences,id),undefined);
+});
+
+test('every word in split source items resolves to exactly its logical sentence',()=>{
+ const items=[item('  The ﬁlter 😀 worked.  Second result.  ',40,70,280),item('A third sentence spans',40,100,180),item('the following line.',40,115,150)];
+ const sentences=extractPage(items,612,792,1).sentences;
+ assert.equal(sentences.length,3);
+ for(const sentence of sentences)for(const run of sentence.runs){
+  const str=items[run.itemIndex].str.slice(run.start,run.end);
+  for(const match of str.matchAll(/\p{L}+/gu))assert.equal(sentenceAtOffset(sentences,run.page,run.itemIndex,run.start+match.index),sentence);
+ }
+ const overlap={...sentences[0],id:'ambiguous'};
+ assert.equal(sentenceAtOffset([sentences[0],overlap],1,0,2),undefined);
+ assert.equal(sentenceAtOffset(sentences,1,0,null),undefined);
+});
+
+test('raised citations separated by a small physical gap remain attached to their sentence',()=>{
+ const body=item('The rate decays.',40,70,150),cite=item('12',192,64,7);cite.height=6;cite.transform=[6,0,0,6,192,728];
+ const next=item('Furthermore, it is stable.',40,90,200);
+ const page=extractPage([body,cite,next],612,792,1);
+ assert.deepEqual(page.sentences.map(s=>s.text),['The rate decays.12','Furthermore, it is stable.']);
+ assert.deepEqual(page.sentences[0].runs.map(r=>[r.itemIndex,r.start,r.end]),[[0,0,16],[1,0,2]]);
+});
+
+test('one unfinished sentence can traverse all three columns without losing its ending-column metadata',()=>{
+ const items=[];
+ for(let row=0;row<4;row++)for(let c=0;c<3;c++)items.push(item(c<2?`${c===0?'Left':'Middle'} column continues with more evidence`:row===0?'and reaches a conclusion. Another result agrees.':`Right column observation ${row} was stable.`,30+c*195,70+row*15,170));
+ const page=extractPage(items,612,792,1),sentences=joinContinuations([page]);
+ assert.equal(sentences.length,5);
+ assert.deepEqual(sentences[0].runs.map(r=>r.itemIndex),[0,3,6,9,1,4,7,10,2]);
+ assert.equal(sentences[0].columnIndex,2);assert.ok(sentences[0].text.endsWith('and reaches a conclusion.'));
+});
+
+test('a page continuation can proceed from the new left column into its right column',()=>{
+ const a=extractPage([item('The observation was obtained with',320,700)],612,792,1),items=[];
+ for(let row=0;row<4;row++){
+  items.push(item('carefully controlled measurement conditions and',40,70+row*15,230));
+  items.push(item(row===0?'under a final calibration. Another result agrees.':`Right column observation ${row} was stable.`,320,70+row*15,230));
+ }
+ const b=extractPage(items,612,792,2),sentences=joinContinuations([a,b]);
+ assert.equal(sentences.length,5);assert.equal(sentences[0].id,a.sentences[0].id);
+ assert.deepEqual(sentences[0].runs.map(r=>[r.page,r.itemIndex]),[[1,0],[2,0],[2,2],[2,4],[2,6],[2,1]]);
+ assert.ok(sentences[0].text.endsWith('under a final calibration.'));
 });

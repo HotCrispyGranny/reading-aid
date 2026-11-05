@@ -10,7 +10,7 @@ export async function parseDocument(pdf:PDFDoc,onPage:(pages:PageData[],sentence
  for(let n=1;n<=pdf.numPages;n++){
   if(cancel())return;
   const p=await pdf.getPage(n);const tc=await p.getTextContent();const vp=p.getViewport({scale:1});
-  pages.push(extractPage(tc.items.filter((i:any)=>'str'in i) as any[],vp.width,vp.height,n) as PageData);
+  pages.push(extractPage(tc.items.filter((i:any)=>'str'in i) as any[],vp.width,vp.height,n,vp.transform) as PageData);
   if(n===1||n%3===0||n===pdf.numPages)onPage([...pages],joinContinuations(pages) as Sentence[]);
   await new Promise(r=>setTimeout(r,0));
  }return pages;

@@ -2,7 +2,7 @@ import {useEffect,useRef,useState,useCallback} from 'react';
 import {BookOpenText,UploadSimple,CaretLeft,CaretRight,SidebarSimple,MagnifyingGlass,Minus,Plus,ArrowsOutLineVertical,Scan,SlidersHorizontal,ArrowUp,ArrowDown,ChatCircleText,Notebook,Highlighter,CursorText,Target,DownloadSimple,ArrowCounterClockwise,X,FilePdf,Check,WarningCircle,CircleNotch,Trash,Sun,Moon,Leaf,ArrowUpRight,BookmarkSimple} from '@phosphor-icons/react';
 import {label,noteOriginLabel} from './lib/labels';
 import {pdfjs,parseDocument,type PDFDoc} from './lib/pdf';
-import {stepSentence} from './lib/sentences.mjs';
+import {stepSentence,resolveSentenceId} from './lib/sentences.mjs';
 import type {DocState,Sentence,PageData,Anchor,Note} from './lib/types';
 import {listDocs,getDoc,saveDoc,removeDoc,fingerprint,exportBackup,restoreBackup,download,notesMarkdown} from './lib/storage';
 import PdfPage,{captureSelection,runRects} from './components/PdfPage';
@@ -22,7 +22,7 @@ export default function App(){
  useEffect(()=>{const clear=()=>{keyMemory.clear();setHasByokKey(false)};window.addEventListener('pagehide',clear);return()=>{window.removeEventListener('pagehide',clear);keyMemory.clear()}},[keyMemory]);
  const refreshAIStatus=useCallback(async()=>{try{const response=await fetch('/api/status',{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();setConfigured(data.configured===true);setBetaStatus(data.owner);setByokStatus(data.byok);if(data.localOnly||!data.owner&&!data.byok)setAIMode(mode=>mode==='none'?'local':mode)}catch{setConfigured(false);setBetaStatus({enabled:false,authenticated:false,state:'unavailable'});setByokStatus({enabled:false,state:'unavailable'})}},[]);
  const aiConfigured=aiMode==='byok'?hasByokKey&&!!byokStatus?.enabled:aiMode==='owner'?configured&&!!betaStatus?.authenticated:aiMode==='local'?configured:false;
- const current=sentences.find(s=>s.id===doc?.sentenceId),idx=current?sentences.indexOf(current):-1;
+ const current=resolveSentenceId(sentences,doc?.sentenceId),idx=current?sentences.indexOf(current):-1;
  const notify=useCallback((s:string)=>{setToast(s);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(''),4500)},[]);
  const refresh=useCallback(()=>listDocs().then(setLibrary).catch(()=>setError('Browser storage is unavailable. Please allow IndexedDB.')),[]);
  useEffect(()=>{refresh();fetch('/api/library').then(r=>r.json()).then(d=>{if(Array.isArray(d))setServerShelf(d)}).catch(()=>{});listDocs().then(ds=>{const last=ds.find(d=>d.id===localStorage.getItem('judu-last-doc'));if(last)openDocument(last)});refreshAIStatus();return()=>{loadId.current++;pdfRef.current?.destroy()}},[refresh,refreshAIStatus]);
@@ -63,13 +63,13 @@ export default function App(){
  useEffect(()=>{
   const pending=pendingJump.current;if(!pending||!container.current)return;const root=container.current.querySelector<HTMLElement>(`.pdf-page[data-page="${pending.page}"]`);if(!root)return;
   if(pending.restoreTop!==undefined&&!pending.id){container.current.scrollTop=pending.restoreTop;pendingJump.current=null;return}
-  const s=sentences.find(s=>s.id===pending.id);if(!s){if(parseComplete&&pending.id){if(pending.restoreTop!==undefined)container.current.scrollTop=pending.restoreTop;else root.scrollIntoView({block:'start'});pendingJump.current=null;return}if(!pending.id){root.scrollIntoView({block:'start',behavior:'smooth'});pendingJump.current=null}return}
+  const s=resolveSentenceId(sentences,pending.id);if(!s){if(parseComplete&&pending.id){if(pending.restoreTop!==undefined)container.current.scrollTop=pending.restoreTop;else root.scrollIntoView({block:'start'});pendingJump.current=null;return}if(!pending.id){root.scrollIntoView({block:'start',behavior:'smooth'});pendingJump.current=null}return}
   const rects=runRects(root,s,pending.page);if(!rects.length){const bounds=root.getBoundingClientRect(),viewport=container.current.getBoundingClientRect();if(bounds.top>viewport.bottom||bounds.bottom<viewport.top)root.scrollIntoView({block:'start',behavior:'smooth'});return}
   // Source order starts at the bottom-left when a sentence crosses columns.
   const first=runRects(root,{...s,runs:s.runs.filter(r=>r.page===pending.page).slice(0,1)},pending.page)[0]||rects[0],last=rects.at(-1)!;const b=root.getBoundingClientRect(),c=container.current.getBoundingClientRect();const top=b.top+first.y*displayScale,bottom=b.top+(last.y+last.h)*displayScale;
   if(top<c.top+55||bottom>c.bottom-75){const target=container.current.scrollTop+top-c.top-Math.min(150,c.height*.24);container.current.scrollTo({top:target,behavior:'smooth'})}pendingJump.current=null;
  },[readyVersion,current?.id,displayScale,sentences,parseComplete]);
- function onScroll(){clearTimeout(scrollTimer.current);scrollTimer.current=setTimeout(()=>{const c=container.current;if(!c||!docRef.current)return;const top=c.getBoundingClientRect().top+90;let page=1;for(const node of c.querySelectorAll<HTMLElement>('.pdf-page')){if(node.getBoundingClientRect().top<=top)page=Number(node.dataset.page)}setCurrentPage(page);setPageInput(String(page));patch(d=>({...d,page,sentenceId:sentences.find(s=>s.id===d.sentenceId)?.runs.some(r=>r.page===page)?d.sentenceId:undefined,scrollTop:c.scrollTop,zoom:fit?0:scale}))},350)}
+ function onScroll(){clearTimeout(scrollTimer.current);scrollTimer.current=setTimeout(()=>{const c=container.current;if(!c||!docRef.current)return;const top=c.getBoundingClientRect().top+90;let page=1;for(const node of c.querySelectorAll<HTMLElement>('.pdf-page')){if(node.getBoundingClientRect().top<=top)page=Number(node.dataset.page)}setCurrentPage(page);setPageInput(String(page));patch(d=>({...d,page,sentenceId:resolveSentenceId(sentences,d.sentenceId)?.runs.some(r=>r.page===page)?d.sentenceId:undefined,scrollTop:c.scrollTop,zoom:fit?0:scale}))},350)}
  function zoom(delta:number){const value=Math.max(.35,Math.min(2.5,displayScale+delta));setFit(false);setScale(value);patch(d=>({...d,zoom:value}));if(current)pendingJump.current={page:current.page,id:current.id}}
  function selected(){setTimeout(()=>{const captured=captureSelection();if(captured)setSelection({...captured,sentenceId:current&&current.text.includes(captured.text)?current.id:undefined});},0)}
  function anchor():Anchor|undefined{if(selection)return selection;if(!current)return;return {text:current.text,page:current.page,sentenceId:current.id,rects:current.runs.reduce<Anchor['rects']>((all,r)=>{if(all.some(x=>x.page===r.page))return all;const root=container.current?.querySelector<HTMLElement>(`.pdf-page[data-page="${r.page}"]`);return root?[...all,...runRects(root,current,r.page)]:all},[])}}
